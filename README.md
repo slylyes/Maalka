@@ -1,36 +1,76 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# MAALKA — Gestion interne location de robes
 
-## Getting Started
+Application interne premium pour gérer:
+- le stock des robes,
+- les clients,
+- les réservations,
+- les photos des robes (Supabase Storage),
+- le téléchargement de contrat/facture PDF.
 
-First, run the development server:
+Stack: Next.js (App Router) + Tailwind + Supabase (Auth, Postgres, Storage) + Vercel.
+
+## Prérequis
+
+- Node.js 20+
+- npm
+- Compte Supabase avec un projet actif
+- Supabase CLI (déjà incluse dans les dépendances dev de ce projet)
+
+## Installation locale
+
+1) Installer les dépendances:
+
+```bash
+npm install
+```
+
+2) Configurer les variables d'environnement:
+
+```bash
+cp .env.example .env.local
+```
+
+Puis remplir `.env.local`:
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+3) Lancer le serveur local:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Application: http://localhost:3000
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Base de données Supabase
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Les migrations sont dans `supabase/migrations`.
 
-## Learn More
+Pour pousser les migrations vers le projet Supabase lié:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npx supabase db push
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Vérification qualité
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm run lint
+npm run build
+```
 
-## Deploy on Vercel
+## Déploiement sur Vercel
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1) Importer le repo dans Vercel.
+2) Ajouter les variables d'environnement du projet:
+	- `NEXT_PUBLIC_SUPABASE_URL`
+	- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+3) Déployer.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Build command: `npm run build`
+
+## Notes importantes
+
+- Les PDFs (contrat/facture) sont générés à la volée et téléchargés directement (pas de stockage PDF).
+- Les photos de robes sont stockées dans le bucket Supabase `dresses`.
+- L'accès applicatif est protégé par authentification Supabase (email/mot de passe).
