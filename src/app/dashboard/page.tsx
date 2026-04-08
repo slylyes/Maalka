@@ -141,9 +141,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     analyticRows.reduce((sum, reservation) => sum + Number(reservation.balance_due ?? 0), 0) ?? 0;
   const averageBasket = reservationsInPeriod > 0 ? turnoverInPeriod / reservationsInPeriod : 0;
 
-  // No cost tracking yet in the schema, so estimated profit matches turnover.
-  const estimatedProfit = turnoverInPeriod;
-
   const topDressesMap = new Map<string, { label: string; count: number; turnover: number }>();
 
   for (const reservation of analyticRows) {
@@ -266,7 +263,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-2xl border border-[var(--border-soft)] bg-white p-4">
             <p className="text-xs uppercase tracking-wide text-[var(--muted)]">Réservations</p>
             <p className="mt-2 text-2xl font-light text-[var(--foreground)]">{reservationsInPeriod}</p>
@@ -283,13 +280,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             <p className="text-xs uppercase tracking-wide text-[var(--muted)]">Reste à encaisser</p>
             <p className="mt-2 text-2xl font-light text-[var(--foreground)]">{formatAmount(outstandingInPeriod)}</p>
           </div>
-          <div className="rounded-2xl border border-[var(--border-soft)] bg-white p-4">
-            <p className="text-xs uppercase tracking-wide text-[var(--muted)]">Bénéfice estimé*</p>
-            <p className="mt-2 text-2xl font-light text-[var(--foreground)]">{formatAmount(estimatedProfit)}</p>
-          </div>
         </div>
-
-        <p className="mt-2 text-xs text-[var(--muted)]">*Estimé sans charges enregistrées dans l&apos;application.</p>
 
         <div className="mt-6 grid gap-4 xl:grid-cols-12">
           <section className="rounded-2xl border border-[var(--border-soft)] bg-white p-4 xl:col-span-7">

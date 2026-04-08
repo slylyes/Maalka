@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -9,6 +10,35 @@ type LoginFormProps = {
   nextPath: string;
   initialStep?: "signin" | "otp" | "reset";
 };
+
+function wait(ms: number) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function mapChallengeError(rawError: string | null | undefined) {
+  const value = (rawError ?? "").toLowerCase();
+
+  if (
+    value.includes("too many") ||
+    value.includes("rate") ||
+    value.includes("security purposes") ||
+    value.includes("frequency")
+  ) {
+    return "Trop de demandes de vérification. Merci de patienter quelques secondes puis réessayer.";
+  }
+
+  if (value.includes("unauthorized") || value.includes("forbidden")) {
+    return "Session en cours d'initialisation. Réessaie dans quelques secondes.";
+  }
+
+  if (!rawError) {
+    return "Impossible d'envoyer le lien de vérification pour le moment.";
+  }
+
+  return rawError;
+}
 
 function mapRecoveryError(rawError: string) {
   const normalized = rawError.toLowerCase();
@@ -32,7 +62,7 @@ function mapRecoveryError(rawError: string) {
 }
 
 export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) {
-  void nextPath;
+  const router = useRouter();
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
 
   const [email, setEmail] = useState("");
@@ -67,6 +97,7 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
       const searchOtpType = searchType === "recovery" || searchType === "invite" ? searchType : null;
       const hashOtpType = hashType === "recovery" || hashType === "invite" ? hashType : null;
       const otpType = searchOtpType ?? hashOtpType;
+      const isTwoFactorMagicLink = hashType === "magiclink" || hashType === "email";
 
       const resetMessage =
         otpType === "invite"
@@ -134,6 +165,43 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
         return;
       }
 
+      if (accessToken && refreshToken && isTwoFactorMagicLink) {
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+
+        if (isCancelled) return;
+
+        if (sessionError) {
+          setError("Lien de vérification invalide ou expiré. Reconnecte-toi pour recevoir un nouveau lien.");
+          setMode("signin");
+          return;
+        }
+
+        const verifyResponse = await fetch("/api/auth/2fa/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        const verifyJson = await verifyResponse.json().catch(() => ({}));
+
+        if (isCancelled) return;
+
+        if (!verifyResponse.ok) {
+          setMode("otp");
+          setError(
+            verifyJson.error ||
+              "Impossible de finaliser la vérification. Reconnecte-toi puis demande un nouveau lien."
+          );
+          return;
+        }
+
+        cleanRecoveryUrl();
+        router.replace(nextPath);
+        return;
+      }
+
       if (code) {
         const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
 
@@ -152,7 +220,7 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
     return () => {
       isCancelled = true;
     };
-  }, [supabase]);
+  }, [nextPath, router, supabase]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -240,19 +308,43 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
         data: { session },
       } = await supabase.auth.getSession();
 
-      const challengeResponse = await fetch("/api/auth/2fa/challenge", {
-        method: "POST",
-        headers: session?.access_token
-          ? {
-              Authorization: `Bearer ${session.access_token}`,
-            }
-          : undefined,
-      });
-      const challengeJson = await challengeResponse.json().catch(() => ({}));
+      let challengeError: string | null = null;
+      let challengeSucceeded = false;
 
-      if (!challengeResponse.ok) {
-        await supabase.auth.signOut();
-        setError(challengeJson.error || "Impossible d'envoyer le code de vérification.");
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const challengeResponse = await fetch("/api/auth/2fa/challenge", {
+          method: "POST",
+          headers: session?.access_token
+            ? {
+                Authorization: `Bearer ${session.access_token}`,
+              }
+            : undefined,
+        });
+        const challengeJson = await challengeResponse.json().catch(() => ({}));
+
+        if (challengeResponse.ok) {
+          challengeSucceeded = true;
+          break;
+        }
+
+        challengeError = mapChallengeError(challengeJson.error);
+
+        if ((challengeResponse.status === 401 || challengeResponse.status === 403) && attempt < 2) {
+          await wait(700 * (attempt + 1));
+          continue;
+        }
+
+        if (challengeResponse.status === 429 && attempt < 2) {
+          await wait(1200 * (attempt + 1));
+          continue;
+        }
+
+        break;
+      }
+
+      if (!challengeSucceeded) {
+        setMode("otp");
+        setError(challengeError || "Impossible d'envoyer le lien de vérification.");
         setLoading(false);
         return;
       }

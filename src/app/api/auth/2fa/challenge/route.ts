@@ -42,7 +42,22 @@ export async function POST(request: Request) {
     },
   });
 
-  if (error) return serverErrorFrom(error.message);
+  if (error) {
+    const rawMessage = error.message.toLowerCase();
+    if (
+      rawMessage.includes("too many") ||
+      rawMessage.includes("rate") ||
+      rawMessage.includes("security purposes") ||
+      rawMessage.includes("frequency")
+    ) {
+      return NextResponse.json(
+        { error: "Trop de demandes de vérification. Merci de patienter quelques secondes." },
+        { status: 429 }
+      );
+    }
+
+    return serverErrorFrom(error.message);
+  }
 
   const response = NextResponse.json({
     success: true,

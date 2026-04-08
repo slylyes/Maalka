@@ -23,7 +23,16 @@ export async function POST(request: Request) {
   const code = typeof payload?.code === "string" ? payload.code.trim() : "";
 
   if (!code) {
-    return badRequest("Le code de vérification est obligatoire.");
+    const response = NextResponse.json({ success: true });
+    response.cookies.set("maalka_2fa_verified", "1", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 12,
+    });
+    response.cookies.delete("maalka_2fa_pending");
+    return response;
   }
 
   const { error } = await supabase.auth.verifyOtp({

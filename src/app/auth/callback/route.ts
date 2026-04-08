@@ -24,8 +24,32 @@ export async function GET(request: Request) {
   const supabase = await createSupabaseServerClient();
   let authError: string | null = null;
 
+  // Password setup links can use PKCE code flow. The browser client must complete the exchange.
   if (isPasswordSetupFlow) {
-    await supabase.auth.signOut();
+    const redirectUrl = new URL(nextPath, requestUrl.origin);
+
+    if (code) {
+      redirectUrl.searchParams.set("code", code);
+      if (type === "recovery" || type === "invite") {
+        redirectUrl.searchParams.set("type", type);
+      } else if (reason === "recovery" || reason === "invite") {
+        redirectUrl.searchParams.set("type", reason);
+      }
+    }
+
+    if (tokenHash && (type === "recovery" || type === "invite")) {
+      redirectUrl.searchParams.set("token_hash", tokenHash);
+      redirectUrl.searchParams.set("type", type);
+    }
+
+    if (!code && !tokenHash && (reason === "recovery" || reason === "invite")) {
+      redirectUrl.searchParams.set(
+        "auth_error",
+        reason === "invite" ? "Lien d'invitation incomplet." : "Lien de réinitialisation incomplet."
+      );
+    }
+
+    return NextResponse.redirect(redirectUrl);
   }
 
   if (code) {
@@ -33,19 +57,6 @@ export async function GET(request: Request) {
     if (error) {
       authError = error.message;
     }
-  } else if (tokenHash && (type === "recovery" || type === "invite")) {
-    const { error } = await supabase.auth.verifyOtp({
-      token_hash: tokenHash,
-      type,
-    });
-    if (error) {
-      authError = error.message;
-    }
-  } else if (reason === "recovery" || reason === "invite") {
-    authError =
-      reason === "invite"
-        ? "Lien d'invitation incomplet."
-        : "Lien de réinitialisation incomplet.";
   }
 
   const redirectUrl = new URL(nextPath, requestUrl.origin);
