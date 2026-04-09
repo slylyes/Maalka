@@ -42,15 +42,6 @@ npm run dev
 
 Application: http://localhost:3000
 
-## Base de données Supabase
-
-Les migrations sont dans `supabase/migrations`.
-
-Pour pousser les migrations vers le projet Supabase lié:
-
-```bash
-npx supabase db push
-```
 
 ## Vérification qualité
 
@@ -59,13 +50,6 @@ npm run lint
 npm run build
 ```
 
-## Déploiement sur Vercel
-
-1) Importer le repo dans Vercel.
-2) Ajouter les variables d'environnement du projet:
-	- `NEXT_PUBLIC_SUPABASE_URL`
-	- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-3) Déployer.
 
 Build command: `npm run build`
 
