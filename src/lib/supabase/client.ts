@@ -4,9 +4,5 @@ import { getSupabaseEnv } from "@/lib/supabase/env";
 
 export function createSupabaseBrowserClient() {
   const { supabaseUrl, supabaseAnonKey } = getSupabaseEnv();
-  return createBrowserClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      flowType: "implicit",
-    },
-  });
+  return createBrowserClient(supabaseUrl, supabaseAnonKey);
 }
