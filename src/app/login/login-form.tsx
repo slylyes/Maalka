@@ -91,7 +91,7 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
       const reason = currentUrl.searchParams.get("reason");
       const hashType = hashParams.get("type");
       const tokenHash = currentUrl.searchParams.get("token_hash");
-      const token = currentUrl.searchParams.get("token");
+      const token = currentUrl.searchParams.get("token") ?? hashParams.get("token");
       const emailParam = currentUrl.searchParams.get("email") ?? hashParams.get("email");
       const code = currentUrl.searchParams.get("code");
       const callbackError = currentUrl.searchParams.get("auth_error");
@@ -102,6 +102,8 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
       const searchMagicType = searchType === "magiclink" || searchType === "email" ? searchType : null;
       const hashMagicType = hashType === "magiclink" || hashType === "email" ? hashType : null;
       const magicType = searchMagicType ?? hashMagicType ?? (reason === "2fa" ? "magiclink" : null);
+      const magicTypeValue =
+        magicType === "email" ? "email" : magicType === "magiclink" ? "magiclink" : null;
       const otpType = searchOtpType ?? hashOtpType;
       const isTwoFactorMagicLink = hashType === "magiclink" || hashType === "email";
       const isTwoFactorCode =
@@ -140,20 +142,27 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
         return;
       }
 
-      if ((tokenHash || token) && magicType) {
-        const verifyParams = tokenHash
-          ? { token_hash: tokenHash, type: magicType }
-          : emailParam
-            ? { token: token ?? "", type: magicType, email: emailParam }
-            : null;
+      if ((tokenHash || token) && magicTypeValue) {
+        let verifyError: { message: string } | null = null;
 
-        if (!verifyParams) {
+        if (tokenHash) {
+          const { error } = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: magicTypeValue,
+          });
+          verifyError = error;
+        } else if (token && emailParam) {
+          const { error } = await supabase.auth.verifyOtp({
+            token,
+            email: emailParam,
+            type: "email",
+          });
+          verifyError = error;
+        } else {
           setError("Lien de vérification invalide ou expiré. Reconnecte-toi pour recevoir un nouveau lien.");
           setMode("signin");
           return;
         }
-
-        const { error: verifyError } = await supabase.auth.verifyOtp(verifyParams);
 
         if (isCancelled) return;
 
