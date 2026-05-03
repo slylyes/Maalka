@@ -6,6 +6,7 @@ import { getSupabaseEnv } from "@/lib/supabase/env";
 export async function createSupabaseServerClient() {
   const { supabaseUrl, supabaseAnonKey } = getSupabaseEnv();
   const cookieStore = await cookies();
+  const sessionMaxAge = 60 * 60 * 24 * 30;
 
   return createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
@@ -15,7 +16,7 @@ export async function createSupabaseServerClient() {
       setAll(cookiesToSet) {
         try {
           cookiesToSet.forEach(({ name, value, options }) => {
-            cookieStore.set(name, value, options);
+            cookieStore.set(name, value, { ...options, maxAge: sessionMaxAge });
           });
         } catch {
           // no-op in Server Components when set is unavailable

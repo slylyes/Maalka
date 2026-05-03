@@ -5,6 +5,7 @@ import { getSupabaseEnv } from "@/lib/supabase/env";
 
 export async function proxy(request: NextRequest) {
   const { supabaseUrl, supabaseAnonKey } = getSupabaseEnv();
+  const sessionMaxAge = 60 * 60 * 24 * 30;
   let response = NextResponse.next({
     request: {
       headers: request.headers,
@@ -24,7 +25,7 @@ export async function proxy(request: NextRequest) {
         });
 
         cookiesToSet.forEach(({ name, value, options }) => {
-          response.cookies.set(name, value, options);
+          response.cookies.set(name, value, { ...options, maxAge: sessionMaxAge });
         });
       },
     },
