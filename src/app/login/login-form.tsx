@@ -89,6 +89,7 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
 
       const searchType = currentUrl.searchParams.get("type");
       const reason = currentUrl.searchParams.get("reason");
+      const state = currentUrl.searchParams.get("state");
       const hashType = hashParams.get("type");
       const tokenHash = currentUrl.searchParams.get("token_hash");
       const token = currentUrl.searchParams.get("token") ?? hashParams.get("token");
@@ -144,6 +145,38 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
       }
 
       if (isTwoFactorReturn) {
+        if (state) {
+          const verifyResponse = await fetch("/api/auth/2fa/verify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ state }),
+          });
+          const verifyJson = await verifyResponse.json().catch(() => ({}));
+
+          if (isCancelled) return;
+
+          if (!verifyResponse.ok) {
+            setMode("otp");
+            setError(
+              verifyJson.error ||
+                "Impossible de finaliser la vérification. Reconnecte-toi puis demande un nouveau lien."
+            );
+            return;
+          }
+
+          const clean = new URL(window.location.href);
+          clean.searchParams.delete("code");
+          clean.searchParams.delete("token");
+          clean.searchParams.delete("token_hash");
+          clean.searchParams.delete("type");
+          clean.searchParams.delete("reason");
+          clean.searchParams.delete("state");
+          clean.hash = "";
+          window.history.replaceState({}, "", `${clean.pathname}${clean.search}`);
+          router.replace(nextPath);
+          return;
+        }
+
         let sessionError: { message: string } | null = null;
         let hasSession = false;
 
@@ -210,6 +243,7 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
         clean.searchParams.delete("token_hash");
         clean.searchParams.delete("type");
         clean.searchParams.delete("reason");
+        clean.searchParams.delete("state");
         clean.hash = "";
         window.history.replaceState({}, "", `${clean.pathname}${clean.search}`);
         router.replace(nextPath);

@@ -21,8 +21,14 @@ export async function POST(request: Request) {
 
   const payload = await request.json().catch(() => null);
   const code = typeof payload?.code === "string" ? payload.code.trim() : "";
+  const state = typeof payload?.state === "string" ? payload.state.trim() : "";
+  const stateCookie = cookieStore.get("maalka_2fa_state")?.value ?? "";
 
   if (!code) {
+    if (!state || state !== stateCookie) {
+      return badRequest("Vérification expirée. Merci de demander un nouveau lien.");
+    }
+
     const response = NextResponse.json({ success: true });
     response.cookies.set("maalka_2fa_verified", "1", {
       httpOnly: true,
@@ -32,6 +38,7 @@ export async function POST(request: Request) {
       maxAge: 60 * 60 * 12,
     });
     response.cookies.delete("maalka_2fa_pending");
+    response.cookies.delete("maalka_2fa_state");
     return response;
   }
 
@@ -54,6 +61,7 @@ export async function POST(request: Request) {
     maxAge: 60 * 60 * 12,
   });
   response.cookies.delete("maalka_2fa_pending");
+  response.cookies.delete("maalka_2fa_state");
 
   return response;
 }
