@@ -97,6 +97,8 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
       const refreshToken = hashParams.get("refresh_token");
       const searchOtpType = searchType === "recovery" || searchType === "invite" ? searchType : null;
       const hashOtpType = hashType === "recovery" || hashType === "invite" ? hashType : null;
+      const searchMagicType = searchType === "magiclink" || searchType === "email" ? searchType : null;
+      const hashMagicType = hashType === "magiclink" || hashType === "email" ? hashType : null;
       const otpType = searchOtpType ?? hashOtpType;
       const isTwoFactorMagicLink = hashType === "magiclink" || hashType === "email";
       const isTwoFactorCode =
@@ -132,6 +134,43 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
         setMode("reset");
         setMessage(resetMessage);
         cleanRecoveryUrl();
+        return;
+      }
+
+      if (tokenHash && searchMagicType) {
+        const { error: verifyError } = await supabase.auth.verifyOtp({
+          token_hash: tokenHash,
+          type: searchMagicType,
+        });
+
+        if (isCancelled) return;
+
+        if (verifyError) {
+          setError("Lien de vérification invalide ou expiré. Reconnecte-toi pour recevoir un nouveau lien.");
+          setMode("signin");
+          return;
+        }
+
+        const verifyResponse = await fetch("/api/auth/2fa/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        const verifyJson = await verifyResponse.json().catch(() => ({}));
+
+        if (isCancelled) return;
+
+        if (!verifyResponse.ok) {
+          setMode("otp");
+          setError(
+            verifyJson.error ||
+              "Impossible de finaliser la vérification. Reconnecte-toi puis demande un nouveau lien."
+          );
+          return;
+        }
+
+        cleanRecoveryUrl();
+        router.replace(nextPath);
         return;
       }
 
