@@ -92,6 +92,7 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
       const hashType = hashParams.get("type");
       const tokenHash = currentUrl.searchParams.get("token_hash");
       const token = currentUrl.searchParams.get("token");
+      const emailParam = currentUrl.searchParams.get("email") ?? hashParams.get("email");
       const code = currentUrl.searchParams.get("code");
       const callbackError = currentUrl.searchParams.get("auth_error");
       const accessToken = hashParams.get("access_token");
@@ -140,10 +141,19 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
       }
 
       if ((tokenHash || token) && magicType) {
-        const { error: verifyError } = await supabase.auth.verifyOtp({
-          ...(tokenHash ? { token_hash: tokenHash } : { token: token ?? "" }),
-          type: magicType,
-        });
+        const verifyParams = tokenHash
+          ? { token_hash: tokenHash, type: magicType }
+          : emailParam
+            ? { token: token ?? "", type: magicType, email: emailParam }
+            : null;
+
+        if (!verifyParams) {
+          setError("Lien de vérification invalide ou expiré. Reconnecte-toi pour recevoir un nouveau lien.");
+          setMode("signin");
+          return;
+        }
+
+        const { error: verifyError } = await supabase.auth.verifyOtp(verifyParams);
 
         if (isCancelled) return;
 
