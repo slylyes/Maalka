@@ -88,6 +88,7 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
       );
 
       const searchType = currentUrl.searchParams.get("type");
+      const reason = currentUrl.searchParams.get("reason");
       const hashType = hashParams.get("type");
       const tokenHash = currentUrl.searchParams.get("token_hash");
       const code = currentUrl.searchParams.get("code");
@@ -98,6 +99,8 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
       const hashOtpType = hashType === "recovery" || hashType === "invite" ? hashType : null;
       const otpType = searchOtpType ?? hashOtpType;
       const isTwoFactorMagicLink = hashType === "magiclink" || hashType === "email";
+      const isTwoFactorCode =
+        Boolean(code) && (reason === "2fa" || searchType === "magiclink" || searchType === "email");
 
       const resetMessage =
         otpType === "invite"
@@ -162,6 +165,45 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
         setMode("reset");
         setMessage(resetMessage);
         cleanRecoveryUrl();
+        return;
+      }
+
+      if (isTwoFactorCode && code) {
+        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+
+        if (isCancelled) return;
+
+        if (exchangeError) {
+          setError("Lien de vérification invalide ou expiré. Reconnecte-toi pour recevoir un nouveau lien.");
+          setMode("signin");
+          return;
+        }
+
+        const verifyResponse = await fetch("/api/auth/2fa/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        const verifyJson = await verifyResponse.json().catch(() => ({}));
+
+        if (isCancelled) return;
+
+        if (!verifyResponse.ok) {
+          setMode("otp");
+          setError(
+            verifyJson.error ||
+              "Impossible de finaliser la vérification. Reconnecte-toi puis demande un nouveau lien."
+          );
+          return;
+        }
+
+        const clean = new URL(window.location.href);
+        clean.searchParams.delete("code");
+        clean.searchParams.delete("reason");
+        clean.searchParams.delete("type");
+        clean.hash = "";
+        window.history.replaceState({}, "", `${clean.pathname}${clean.search}`);
+        router.replace(nextPath);
         return;
       }
 

@@ -32,7 +32,7 @@ export async function POST(request: Request) {
   }
 
   const origin = new URL(request.url).origin;
-  const redirectTo = `${origin}/auth/callback?next=/dashboard&reason=2fa`;
+  const redirectTo = `${origin}/login?step=otp&reason=2fa`;
 
   const { error } = await supabase.auth.signInWithOtp({
     email: currentUser.email,
