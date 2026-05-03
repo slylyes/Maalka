@@ -32,7 +32,8 @@ export async function POST(request: Request) {
   }
 
   const origin = new URL(request.url).origin;
-  const redirectTo = `${origin}/login?step=otp`;
+  const redirectTo = `${origin}/login?step=otp&reason=2fa`;
+
   const { error } = await supabase.auth.signInWithOtp({
     email: currentUser.email,
     options: {
