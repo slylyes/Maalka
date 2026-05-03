@@ -104,6 +104,7 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
       const magicType = searchMagicType ?? hashMagicType ?? (reason === "2fa" ? "magiclink" : null);
       const magicTypeValue =
         magicType === "email" ? "email" : magicType === "magiclink" ? "magiclink" : null;
+      const isTwoFactorReturn = reason === "2fa" || Boolean(searchMagicType) || Boolean(hashMagicType);
       const otpType = searchOtpType ?? hashOtpType;
       const isTwoFactorMagicLink = hashType === "magiclink" || hashType === "email";
       const isTwoFactorCode =
@@ -142,22 +143,31 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
         return;
       }
 
-      if ((tokenHash || token) && magicTypeValue) {
-        let verifyError: { message: string } | null = null;
+      if (isTwoFactorReturn) {
+        let sessionError: { message: string } | null = null;
 
-        if (tokenHash) {
+        if (code) {
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          sessionError = error;
+        } else if (accessToken && refreshToken) {
+          const { error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+          sessionError = error;
+        } else if (tokenHash && magicTypeValue) {
           const { error } = await supabase.auth.verifyOtp({
             token_hash: tokenHash,
             type: magicTypeValue,
           });
-          verifyError = error;
+          sessionError = error;
         } else if (token && emailParam) {
           const { error } = await supabase.auth.verifyOtp({
             token,
             email: emailParam,
             type: "email",
           });
-          verifyError = error;
+          sessionError = error;
         } else {
           setError("Lien de vérification invalide ou expiré. Reconnecte-toi pour recevoir un nouveau lien.");
           setMode("signin");
@@ -166,7 +176,7 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
 
         if (isCancelled) return;
 
-        if (verifyError) {
+        if (sessionError) {
           setError("Lien de vérification invalide ou expiré. Reconnecte-toi pour recevoir un nouveau lien.");
           setMode("signin");
           return;
@@ -190,7 +200,14 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
           return;
         }
 
-        cleanRecoveryUrl();
+        const clean = new URL(window.location.href);
+        clean.searchParams.delete("code");
+        clean.searchParams.delete("token");
+        clean.searchParams.delete("token_hash");
+        clean.searchParams.delete("type");
+        clean.searchParams.delete("reason");
+        clean.hash = "";
+        window.history.replaceState({}, "", `${clean.pathname}${clean.search}`);
         router.replace(nextPath);
         return;
       }
