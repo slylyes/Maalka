@@ -145,6 +145,7 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
 
       if (isTwoFactorReturn) {
         let sessionError: { message: string } | null = null;
+        let hasSession = false;
 
         if (code) {
           const { error } = await supabase.auth.exchangeCodeForSession(code);
@@ -168,15 +169,18 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
             type: "email",
           });
           sessionError = error;
-        } else {
-          setError("Lien de vérification invalide ou expiré. Reconnecte-toi pour recevoir un nouveau lien.");
-          setMode("signin");
-          return;
+        }
+
+        if (!code && !accessToken && !refreshToken && !tokenHash && !(token && emailParam)) {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          hasSession = Boolean(session);
         }
 
         if (isCancelled) return;
 
-        if (sessionError) {
+        if (sessionError || (!code && !accessToken && !refreshToken && !tokenHash && !(token && emailParam) && !hasSession)) {
           setError("Lien de vérification invalide ou expiré. Reconnecte-toi pour recevoir un nouveau lien.");
           setMode("signin");
           return;
