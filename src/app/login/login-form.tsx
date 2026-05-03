@@ -88,29 +88,16 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
       );
 
       const searchType = currentUrl.searchParams.get("type");
-      const reason = currentUrl.searchParams.get("reason");
-      const state = currentUrl.searchParams.get("state");
       const hashType = hashParams.get("type");
       const tokenHash = currentUrl.searchParams.get("token_hash");
-      const token = currentUrl.searchParams.get("token") ?? hashParams.get("token");
-      const emailParam = currentUrl.searchParams.get("email") ?? hashParams.get("email");
       const code = currentUrl.searchParams.get("code");
-      const errorCode = currentUrl.searchParams.get("error_code") ?? hashParams.get("error_code");
       const callbackError = currentUrl.searchParams.get("auth_error");
       const accessToken = hashParams.get("access_token");
       const refreshToken = hashParams.get("refresh_token");
       const searchOtpType = searchType === "recovery" || searchType === "invite" ? searchType : null;
       const hashOtpType = hashType === "recovery" || hashType === "invite" ? hashType : null;
-      const searchMagicType = searchType === "magiclink" || searchType === "email" ? searchType : null;
-      const hashMagicType = hashType === "magiclink" || hashType === "email" ? hashType : null;
-      const magicType = searchMagicType ?? hashMagicType ?? (reason === "2fa" ? "magiclink" : null);
-      const magicTypeValue =
-        magicType === "email" ? "email" : magicType === "magiclink" ? "magiclink" : null;
-      const isTwoFactorReturn = reason === "2fa" || Boolean(searchMagicType) || Boolean(hashMagicType);
       const otpType = searchOtpType ?? hashOtpType;
       const isTwoFactorMagicLink = hashType === "magiclink" || hashType === "email";
-      const isTwoFactorCode =
-        Boolean(code) && (reason === "2fa" || searchType === "magiclink" || searchType === "email");
 
       const resetMessage =
         otpType === "invite"
@@ -145,146 +132,6 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
         return;
       }
 
-      if (isTwoFactorReturn && errorCode === "otp_expired") {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-
-        if (isCancelled) return;
-
-        if (!session?.access_token) {
-          setError("Lien expiré. Reconnecte-toi pour recevoir un nouveau lien.");
-          setMode("signin");
-          return;
-        }
-
-        const challengeResponse = await fetch("/api/auth/2fa/challenge", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        });
-        const challengeJson = await challengeResponse.json().catch(() => ({}));
-
-        if (isCancelled) return;
-
-        if (!challengeResponse.ok) {
-          setMode("otp");
-          setError(challengeJson.error || "Impossible d'envoyer un nouveau lien.");
-          return;
-        }
-
-        setMode("otp");
-        setMessage("Lien expiré. Un nouveau lien de vérification vient d'être envoyé.");
-        return;
-      }
-
-      if (isTwoFactorReturn) {
-        if (state) {
-          const verifyResponse = await fetch("/api/auth/2fa/verify", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ state }),
-          });
-          const verifyJson = await verifyResponse.json().catch(() => ({}));
-
-          if (isCancelled) return;
-
-          if (!verifyResponse.ok) {
-            setMode("otp");
-            setError(
-              verifyJson.error ||
-                "Impossible de finaliser la vérification. Reconnecte-toi puis demande un nouveau lien."
-            );
-            return;
-          }
-
-          const clean = new URL(window.location.href);
-          clean.searchParams.delete("code");
-          clean.searchParams.delete("token");
-          clean.searchParams.delete("token_hash");
-          clean.searchParams.delete("type");
-          clean.searchParams.delete("reason");
-          clean.searchParams.delete("state");
-          clean.hash = "";
-          window.history.replaceState({}, "", `${clean.pathname}${clean.search}`);
-          router.replace(nextPath);
-          return;
-        }
-
-        let sessionError: { message: string } | null = null;
-        let hasSession = false;
-
-        if (code) {
-          const { error } = await supabase.auth.exchangeCodeForSession(code);
-          sessionError = error;
-        } else if (accessToken && refreshToken) {
-          const { error } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken,
-          });
-          sessionError = error;
-        } else if (tokenHash && magicTypeValue) {
-          const { error } = await supabase.auth.verifyOtp({
-            token_hash: tokenHash,
-            type: magicTypeValue,
-          });
-          sessionError = error;
-        } else if (token && emailParam) {
-          const { error } = await supabase.auth.verifyOtp({
-            token,
-            email: emailParam,
-            type: "email",
-          });
-          sessionError = error;
-        }
-
-        if (!code && !accessToken && !refreshToken && !tokenHash && !(token && emailParam)) {
-          const {
-            data: { session },
-          } = await supabase.auth.getSession();
-          hasSession = Boolean(session);
-        }
-
-        if (isCancelled) return;
-
-        if (sessionError || (!code && !accessToken && !refreshToken && !tokenHash && !(token && emailParam) && !hasSession)) {
-          setError("Lien de vérification invalide ou expiré. Reconnecte-toi pour recevoir un nouveau lien.");
-          setMode("signin");
-          return;
-        }
-
-        const verifyResponse = await fetch("/api/auth/2fa/verify", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
-        });
-        const verifyJson = await verifyResponse.json().catch(() => ({}));
-
-        if (isCancelled) return;
-
-        if (!verifyResponse.ok) {
-          setMode("otp");
-          setError(
-            verifyJson.error ||
-              "Impossible de finaliser la vérification. Reconnecte-toi puis demande un nouveau lien."
-          );
-          return;
-        }
-
-        const clean = new URL(window.location.href);
-        clean.searchParams.delete("code");
-        clean.searchParams.delete("token");
-        clean.searchParams.delete("token_hash");
-        clean.searchParams.delete("type");
-        clean.searchParams.delete("reason");
-        clean.searchParams.delete("state");
-        clean.hash = "";
-        window.history.replaceState({}, "", `${clean.pathname}${clean.search}`);
-        router.replace(nextPath);
-        return;
-      }
-
       if (callbackError && currentUrl.searchParams.get("step") === "reset") {
         if (isCancelled) return;
 
@@ -315,45 +162,6 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
         setMode("reset");
         setMessage(resetMessage);
         cleanRecoveryUrl();
-        return;
-      }
-
-      if (isTwoFactorCode && code) {
-        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-
-        if (isCancelled) return;
-
-        if (exchangeError) {
-          setError("Lien de vérification invalide ou expiré. Reconnecte-toi pour recevoir un nouveau lien.");
-          setMode("signin");
-          return;
-        }
-
-        const verifyResponse = await fetch("/api/auth/2fa/verify", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
-        });
-        const verifyJson = await verifyResponse.json().catch(() => ({}));
-
-        if (isCancelled) return;
-
-        if (!verifyResponse.ok) {
-          setMode("otp");
-          setError(
-            verifyJson.error ||
-              "Impossible de finaliser la vérification. Reconnecte-toi puis demande un nouveau lien."
-          );
-          return;
-        }
-
-        const clean = new URL(window.location.href);
-        clean.searchParams.delete("code");
-        clean.searchParams.delete("reason");
-        clean.searchParams.delete("type");
-        clean.hash = "";
-        window.history.replaceState({}, "", `${clean.pathname}${clean.search}`);
-        router.replace(nextPath);
         return;
       }
 

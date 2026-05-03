@@ -31,9 +31,8 @@ export async function POST(request: Request) {
     return badRequest("Aucune adresse email trouvée pour ce compte.");
   }
 
-  const state = crypto.randomUUID();
   const origin = new URL(request.url).origin;
-  const redirectTo = `${origin}/login?step=otp&reason=2fa&state=${state}`;
+  const redirectTo = `${origin}/auth/callback?next=/dashboard&reason=2fa`;
 
   const { error } = await supabase.auth.signInWithOtp({
     email: currentUser.email,
@@ -66,13 +65,6 @@ export async function POST(request: Request) {
   });
   response.cookies.delete("maalka_2fa_verified");
   response.cookies.set("maalka_2fa_pending", "1", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 10,
-  });
-  response.cookies.set("maalka_2fa_state", state, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
