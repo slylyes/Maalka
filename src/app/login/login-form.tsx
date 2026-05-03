@@ -95,6 +95,7 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
       const token = currentUrl.searchParams.get("token") ?? hashParams.get("token");
       const emailParam = currentUrl.searchParams.get("email") ?? hashParams.get("email");
       const code = currentUrl.searchParams.get("code");
+      const errorCode = currentUrl.searchParams.get("error_code") ?? hashParams.get("error_code");
       const callbackError = currentUrl.searchParams.get("auth_error");
       const accessToken = hashParams.get("access_token");
       const refreshToken = hashParams.get("refresh_token");
@@ -141,6 +142,40 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
         setMode("reset");
         setMessage(resetMessage);
         cleanRecoveryUrl();
+        return;
+      }
+
+      if (isTwoFactorReturn && errorCode === "otp_expired") {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (isCancelled) return;
+
+        if (!session?.access_token) {
+          setError("Lien expiré. Reconnecte-toi pour recevoir un nouveau lien.");
+          setMode("signin");
+          return;
+        }
+
+        const challengeResponse = await fetch("/api/auth/2fa/challenge", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        });
+        const challengeJson = await challengeResponse.json().catch(() => ({}));
+
+        if (isCancelled) return;
+
+        if (!challengeResponse.ok) {
+          setMode("otp");
+          setError(challengeJson.error || "Impossible d'envoyer un nouveau lien.");
+          return;
+        }
+
+        setMode("otp");
+        setMessage("Lien expiré. Un nouveau lien de vérification vient d'être envoyé.");
         return;
       }
 
