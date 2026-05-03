@@ -91,6 +91,7 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
       const reason = currentUrl.searchParams.get("reason");
       const hashType = hashParams.get("type");
       const tokenHash = currentUrl.searchParams.get("token_hash");
+      const token = currentUrl.searchParams.get("token");
       const code = currentUrl.searchParams.get("code");
       const callbackError = currentUrl.searchParams.get("auth_error");
       const accessToken = hashParams.get("access_token");
@@ -99,6 +100,7 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
       const hashOtpType = hashType === "recovery" || hashType === "invite" ? hashType : null;
       const searchMagicType = searchType === "magiclink" || searchType === "email" ? searchType : null;
       const hashMagicType = hashType === "magiclink" || hashType === "email" ? hashType : null;
+      const magicType = searchMagicType ?? hashMagicType ?? (reason === "2fa" ? "magiclink" : null);
       const otpType = searchOtpType ?? hashOtpType;
       const isTwoFactorMagicLink = hashType === "magiclink" || hashType === "email";
       const isTwoFactorCode =
@@ -137,10 +139,10 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
         return;
       }
 
-      if (tokenHash && searchMagicType) {
+      if ((tokenHash || token) && magicType) {
         const { error: verifyError } = await supabase.auth.verifyOtp({
-          token_hash: tokenHash,
-          type: searchMagicType,
+          ...(tokenHash ? { token_hash: tokenHash } : { token: token ?? "" }),
+          type: magicType,
         });
 
         if (isCancelled) return;
