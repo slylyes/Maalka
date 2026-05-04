@@ -8,36 +8,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type LoginFormProps = {
   nextPath: string;
-  initialStep?: "signin" | "otp" | "reset";
-};
-
-function wait(ms: number) {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
-
-function mapChallengeError(rawError: string | null | undefined) {
-  const value = (rawError ?? "").toLowerCase();
-
-  if (
-    value.includes("too many") ||
-    value.includes("rate") ||
-    value.includes("security purposes") ||
-    value.includes("frequency")
-  ) {
-    return "Trop de demandes de vérification. Merci de patienter quelques secondes puis réessayer.";
-  }
-
-  if (value.includes("unauthorized") || value.includes("forbidden")) {
-    return "Session en cours d'initialisation. Réessaie dans quelques secondes.";
-  }
-
-  if (!rawError) {
-    return "Impossible d'envoyer le lien de vérification pour le moment.";
-  }
-
-  return rawError;
+  initialStep?: "signin" | "reset";
 }
 
 function mapRecoveryError(rawError: string) {
@@ -68,9 +39,8 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [mode, setMode] = useState<"signin" | "otp" | "reset">(initialStep);
+  const [mode, setMode] = useState<"signin" | "reset">(initialStep);
   const [loading, setLoading] = useState(false);
-  const [sendingOtpLink, setSendingOtpLink] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -97,7 +67,6 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
       const searchOtpType = searchType === "recovery" || searchType === "invite" ? searchType : null;
       const hashOtpType = hashType === "recovery" || hashType === "invite" ? hashType : null;
       const otpType = searchOtpType ?? hashOtpType;
-      const isTwoFactorMagicLink = hashType === "magiclink" || hashType === "email";
 
       const resetMessage =
         otpType === "invite"
@@ -162,43 +131,6 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
         setMode("reset");
         setMessage(resetMessage);
         cleanRecoveryUrl();
-        return;
-      }
-
-      if (accessToken && refreshToken && isTwoFactorMagicLink) {
-        const { error: sessionError } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
-        });
-
-        if (isCancelled) return;
-
-        if (sessionError) {
-          setError("Lien de vérification invalide ou expiré. Reconnecte-toi pour recevoir un nouveau lien.");
-          setMode("signin");
-          return;
-        }
-
-        const verifyResponse = await fetch("/api/auth/2fa/verify", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
-        });
-        const verifyJson = await verifyResponse.json().catch(() => ({}));
-
-        if (isCancelled) return;
-
-        if (!verifyResponse.ok) {
-          setMode("otp");
-          setError(
-            verifyJson.error ||
-              "Impossible de finaliser la vérification. Reconnecte-toi puis demande un nouveau lien."
-          );
-          return;
-        }
-
-        cleanRecoveryUrl();
-        router.replace(nextPath);
         return;
       }
 
@@ -287,11 +219,6 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
       return;
     }
 
-    if (mode === "otp") {
-      setLoading(false);
-      return;
-    }
-
     if (mode === "signin") {
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email,
@@ -304,76 +231,10 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
         return;
       }
 
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      let challengeError: string | null = null;
-      let challengeSucceeded = false;
-
-      for (let attempt = 0; attempt < 3; attempt += 1) {
-        const challengeResponse = await fetch("/api/auth/2fa/challenge", {
-          method: "POST",
-          headers: session?.access_token
-            ? {
-                Authorization: `Bearer ${session.access_token}`,
-              }
-            : undefined,
-        });
-        const challengeJson = await challengeResponse.json().catch(() => ({}));
-
-        if (challengeResponse.ok) {
-          challengeSucceeded = true;
-          break;
-        }
-
-        challengeError = mapChallengeError(challengeJson.error);
-
-        if ((challengeResponse.status === 401 || challengeResponse.status === 403) && attempt < 2) {
-          await wait(700 * (attempt + 1));
-          continue;
-        }
-
-        if (challengeResponse.status === 429 && attempt < 2) {
-          await wait(1200 * (attempt + 1));
-          continue;
-        }
-
-        break;
-      }
-
-      if (!challengeSucceeded) {
-        setMode("otp");
-        setError(challengeError || "Impossible d'envoyer le lien de vérification.");
-        setLoading(false);
-        return;
-      }
-
-      setMode("otp");
-      setMessage("Un lien de vérification a été envoyé par email. Clique sur ce lien pour accéder au dashboard.");
+      router.replace(nextPath);
       setLoading(false);
       return;
     }
-  }
-
-  async function resendOtpMagicLink() {
-    setSendingOtpLink(true);
-    setError(null);
-    setMessage(null);
-
-    const challengeResponse = await fetch("/api/auth/2fa/challenge", {
-      method: "POST",
-    });
-    const challengeJson = await challengeResponse.json().catch(() => ({}));
-
-    if (!challengeResponse.ok) {
-      setError(challengeJson.error || "Impossible d'envoyer le lien de vérification.");
-      setSendingOtpLink(false);
-      return;
-    }
-
-    setMessage("Nouveau lien envoyé. Vérifie ta boîte mail puis clique sur le lien.");
-    setSendingOtpLink(false);
   }
 
   async function handleForgotPassword() {
@@ -444,13 +305,6 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
             </div>
           ) : null}
 
-          {mode === "otp" ? (
-            <div className="rounded-xl border border-[var(--border-soft)] bg-[var(--surface-soft)] px-4 py-3 text-sm text-[var(--muted)]">
-              Un lien de vérification a été envoyé par email. Clique sur ce lien pour finaliser la connexion.
-            </div>
-          ) : null}
-
-          {mode !== "otp" ? (
           <div>
             <label className="mb-1.5 block text-sm font-medium text-[var(--muted)]" htmlFor="password">
               {mode === "reset" ? "Nouveau mot de passe" : "Mot de passe"}
@@ -465,7 +319,6 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
               className="premium-input w-full"
             />
           </div>
-          ) : null}
 
           {mode === "reset" ? (
             <div>
@@ -484,28 +337,17 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
             </div>
           ) : null}
 
-          {mode !== "otp" ? (
-            <button
-              type="submit"
-              disabled={loading}
-              className="premium-btn w-full px-4 py-2.5 text-sm disabled:opacity-60"
-            >
-              {loading
-                ? "Chargement..."
-                : mode === "reset"
-                  ? "Enregistrer le nouveau mot de passe"
-                  : "Se connecter"}
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={resendOtpMagicLink}
-              disabled={sendingOtpLink}
-              className="premium-btn w-full px-4 py-2.5 text-sm disabled:opacity-60"
-            >
-              {sendingOtpLink ? "Envoi..." : "Renvoyer le lien"}
-            </button>
-          )}
+          <button
+            type="submit"
+            disabled={loading}
+            className="premium-btn w-full px-4 py-2.5 text-sm disabled:opacity-60"
+          >
+            {loading
+              ? "Chargement..."
+              : mode === "reset"
+                ? "Enregistrer le nouveau mot de passe"
+                : "Se connecter"}
+          </button>
         </form>
 
         <div className="mt-4 flex items-center justify-between text-sm">
@@ -519,21 +361,6 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
                 Mot de passe oublié
               </button>
             </>
-          ) : null}
-
-          {mode === "otp" ? (
-            <button
-              type="button"
-              className="text-[var(--muted)] underline underline-offset-4"
-              onClick={async () => {
-                await supabase.auth.signOut();
-                setMode("signin");
-                setError(null);
-                setMessage(null);
-              }}
-            >
-              Revenir à la connexion
-            </button>
           ) : null}
 
           {mode === "reset" ? (

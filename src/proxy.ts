@@ -39,7 +39,7 @@ export async function proxy(request: NextRequest) {
   const loginStep = request.nextUrl.searchParams.get("step");
   const isLoginPage = pathname === "/login";
   const isProtectedPage = pathname.startsWith("/dashboard");
-  const isTwoFactorVerified = request.cookies.get("maalka_2fa_verified")?.value === "1";
+  const isTwoFactorVerified = true;
   const hasRecoveryParams =
     request.nextUrl.searchParams.get("type") === "recovery" ||
     request.nextUrl.searchParams.get("type") === "invite" ||
@@ -62,13 +62,7 @@ export async function proxy(request: NextRequest) {
     clearTwoFactorCookies();
   }
 
-  if (user && isProtectedPage && !isTwoFactorVerified) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.searchParams.set("next", pathname);
-    url.searchParams.set("step", "otp");
-    return NextResponse.redirect(url);
-  }
+  // 2FA disabled: no additional redirect needed
 
   const allowLoginStep = loginStep === "reset" || loginStep === "otp";
 
