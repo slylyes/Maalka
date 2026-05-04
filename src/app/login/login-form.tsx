@@ -139,7 +139,12 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
 
         if (isCancelled) return;
 
-        if (!exchangeError && searchOtpType) {
+        if (exchangeError) {
+          setError(mapRecoveryError(exchangeError.message));
+          return;
+        }
+
+        if (searchOtpType) {
           setMode("reset");
           setMessage(resetMessage);
           cleanRecoveryUrl();

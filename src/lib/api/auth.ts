@@ -8,7 +8,7 @@ type AuthGuardOptions = {
 };
 
 export async function requireAuthenticatedUser(options: AuthGuardOptions = {}) {
-  const requireTwoFactor = options.requireTwoFactor ?? true;
+  const requireTwoFactor = options.requireTwoFactor ?? false;
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
