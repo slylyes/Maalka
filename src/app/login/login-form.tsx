@@ -251,11 +251,10 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
       return;
     }
 
-    const callbackUrl = new URL("/auth/callback", window.location.origin);
-    callbackUrl.searchParams.set("next", "/login?step=reset");
-    callbackUrl.searchParams.set("reason", "recovery");
+    const redirectUrl = new URL("/login", window.location.origin);
+    redirectUrl.searchParams.set("step", "reset");
 
-    const redirectTo = callbackUrl.toString();
+    const redirectTo = redirectUrl.toString();
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
       redirectTo,
     });
@@ -265,7 +264,7 @@ export function LoginForm({ nextPath, initialStep = "signin" }: LoginFormProps) 
       if (errorMessage.includes("redirect") || errorMessage.includes("allowed")) {
         setError(
           "Impossible d'envoyer l'email: URL de redirection non autorisée. Ajoute " +
-            `${window.location.origin}/auth/callback` +
+            `${window.location.origin}/login` +
             " dans Supabase > Authentication > URL Configuration > Redirect URLs."
         );
       } else {
