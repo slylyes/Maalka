@@ -14,6 +14,8 @@ type DressOption = {
   name: string | null;
   status: string;
   price: number;
+  base_price?: number;
+  discount_amount?: number;
 };
 type ClientOption = { id: string; first_name: string; last_name: string; phone: string };
 
@@ -52,6 +54,7 @@ export function ReservationsClient({
   const [error, setError] = useState<string | null>(null);
 
   const [dressId, setDressId] = useState("");
+  const [dressIds, setDressIds] = useState<string[]>([]);
   const [clientId, setClientId] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -61,8 +64,9 @@ export function ReservationsClient({
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const selectedDress = dresses.find((dress) => dress.id === dressId) ?? null;
-  const totalPrice = selectedDress ? String(selectedDress.price) : "";
+  const selectedDresses = dresses.filter((dress) => dressIds.includes(dress.id));
+  const totalPriceValue = selectedDresses.reduce((total, dress) => total + Number(dress.price || 0), 0);
+  const totalPrice = selectedDresses.length ? totalPriceValue.toFixed(2) : "";
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -96,14 +100,8 @@ export function ReservationsClient({
     setSubmitting(true);
     setError(null);
 
-    if (!dressId || !clientId || !startDate || !endDate) {
-      setError("Merci de renseigner la robe, le client et les dates de réservation.");
-      setSubmitting(false);
-      return;
-    }
-
-    if (!selectedDress) {
-      setError("Impossible de déterminer le prix de la robe sélectionnée.");
+    if (dressIds.length === 0 || !clientId || !startDate || !endDate) {
+      setError("Merci de renseigner au moins une robe, le client et les dates de réservation.");
       setSubmitting(false);
       return;
     }
@@ -112,11 +110,10 @@ export function ReservationsClient({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        dress_id: dressId,
+        dress_ids: dressIds,
         client_id: clientId,
         start_date: startDate,
         end_date: endDate,
-        total_price: selectedDress.price,
         deposit_paid: depositPaid.trim().length > 0 ? Number(depositPaid) : 0,
         caution_amount: cautionAmount.trim().length > 0 ? Number(cautionAmount) : 0,
         caution_status: cautionStatus,
@@ -133,6 +130,7 @@ export function ReservationsClient({
     }
 
     setDressId("");
+    setDressIds([]);
     setClientId("");
     setStartDate("");
     setEndDate("");
@@ -162,19 +160,66 @@ export function ReservationsClient({
       <article className="premium-card p-6 xl:col-span-4">
         <h2 className="text-xl font-light tracking-wide text-[var(--foreground)]">Nouvelle réservation</h2>
         <form className="mt-3 space-y-3" onSubmit={createReservation}>
-          <select
-            required
-            value={dressId}
-            onChange={(event) => setDressId(event.target.value)}
-            className="premium-input w-full"
-          >
-            <option value="">Sélectionner une robe</option>
-            {dresses.map((dress) => (
-              <option key={dress.id} value={dress.id}>
-                {dress.reference} {dress.name ? `- ${dress.name}` : ""}
-              </option>
-            ))}
-          </select>
+          <div className="space-y-2">
+            <select
+              value={dressId}
+              onChange={(event) => setDressId(event.target.value)}
+              className="premium-input w-full"
+            >
+              <option value="">Sélectionner une robe</option>
+              {dresses.map((dress) => (
+                <option key={dress.id} value={dress.id}>
+                  {dress.reference} {dress.name ? `- ${dress.name}` : ""}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => {
+                setError(null);
+                if (!dressId) {
+                  setError("Sélectionne une robe avant de l'ajouter.");
+                  return;
+                }
+                if (dressIds.includes(dressId)) {
+                  setError("Cette robe est déjà ajoutée.");
+                  return;
+                }
+                setDressIds((previous) => [...previous, dressId]);
+                setDressId("");
+              }}
+              className="w-full rounded-xl border border-[var(--border-soft)] bg-white px-3 py-2 text-sm text-[var(--muted)]"
+            >
+              Ajouter la robe
+            </button>
+          </div>
+
+          <div className="rounded-xl border border-[var(--border-soft)] bg-[var(--surface-soft)] p-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">Robes ajoutées</p>
+            {selectedDresses.length === 0 ? (
+              <p className="mt-2 text-sm text-[var(--muted)]">Aucune robe ajoutée pour l'instant.</p>
+            ) : (
+              <ul className="mt-2 space-y-2">
+                {selectedDresses.map((dress) => (
+                  <li key={dress.id} className="flex items-center justify-between gap-2 text-sm">
+                    <span className="text-[var(--foreground)]">
+                      {dress.reference} {dress.name ? `- ${dress.name}` : ""}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setError(null);
+                        setDressIds((previous) => previous.filter((id) => id !== dress.id));
+                      }}
+                      className="rounded-lg border border-rose-200 bg-white px-2.5 py-1 text-xs text-rose-700"
+                    >
+                      Retirer
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
 
           <select
             required
@@ -218,7 +263,7 @@ export function ReservationsClient({
             min={0}
             type="number"
             step="0.01"
-            placeholder="Acompte payé (DA)"
+            placeholder="Acompte payé par robe (DA)"
             value={depositPaid}
             onChange={(event) => setDepositPaid(event.target.value)}
             className="premium-input w-full"
@@ -227,7 +272,7 @@ export function ReservationsClient({
             min={0}
             type="number"
             step="0.01"
-            placeholder="Montant caution (DA)"
+            placeholder="Montant caution par robe (DA)"
             value={cautionAmount}
             onChange={(event) => setCautionAmount(event.target.value)}
             className="premium-input w-full"

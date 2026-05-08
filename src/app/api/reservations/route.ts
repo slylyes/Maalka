@@ -73,7 +73,13 @@ export async function POST(request: Request) {
 
   const payload = await request.json().catch(() => null);
 
-  if (!payload?.dress_id || typeof payload.dress_id !== "string") {
+  const dressIdsFromPayload = Array.isArray(payload?.dress_ids)
+    ? payload.dress_ids.filter((value: unknown) => typeof value === "string")
+    : [];
+  const dressIdFromPayload = typeof payload?.dress_id === "string" ? [payload.dress_id] : [];
+  const uniqueDressIds = Array.from(new Set([...dressIdsFromPayload, ...dressIdFromPayload]));
+
+  if (uniqueDressIds.length === 0) {
     return badRequest("La robe est obligatoire.");
   }
 
@@ -96,68 +102,112 @@ export async function POST(request: Request) {
     return badRequest("Le statut de caution doit être: en attente, reçue, ou pas de caution.");
   }
 
-  const { data: dressData, error: dressError } = await supabase
+  const startDate = parseStartDate(payload.start_date);
+  const { data: dressRows, error: dressError } = await supabase
     .from("dresses")
-    .select("price, discount_amount, reference")
-    .eq("id", payload.dress_id)
-    .single();
+    .select("id, price, discount_amount, reference")
+    .in("id", uniqueDressIds);
 
-  if (dressError || !dressData) {
+  if (dressError || !dressRows || dressRows.length === 0) {
     return badRequest("Robe introuvable. Merci de sélectionner une robe valide.");
   }
 
-  const startDate = parseStartDate(payload.start_date);
-  const firstContractNumber = formatContractNumber(dressData.reference, startDate, 0);
-  const discountedPrice = Math.max(
-    Number(dressData.price) - Number(dressData.discount_amount ?? 0),
-    0
-  );
+  if (dressRows.length !== uniqueDressIds.length) {
+    return badRequest("Certaines robes sélectionnées sont introuvables.");
+  }
 
-  const { count: existingCount } = await supabase
+  const depositPaid =
+    typeof payload.deposit_paid === "number" && payload.deposit_paid >= 0
+      ? payload.deposit_paid
+      : 0;
+  const cautionAmount =
+    typeof payload.caution_amount === "number" && payload.caution_amount >= 0
+      ? payload.caution_amount
+      : 0;
+  const cautionStatus = typeof payload.caution_status === "string" ? payload.caution_status : "pending";
+  const pickupDatetime = typeof payload.pickup_datetime === "string" ? payload.pickup_datetime : null;
+  const returnDatetime = typeof payload.return_datetime === "string" ? payload.return_datetime : null;
+  const notes = typeof payload.notes === "string" ? payload.notes : null;
+
+  const uniqueReferences = Array.from(new Set(dressRows.map((dress) => dress.reference)));
+  const countsByReference = new Map<string, number>();
+
+  try {
+    await Promise.all(
+      uniqueReferences.map(async (reference) => {
+        const firstContractNumber = formatContractNumber(reference, startDate, 0);
+        const { count, error } = await supabase
+          .from("reservations")
+          .select("id", { head: true, count: "exact" })
+          .ilike("contract_number", `${firstContractNumber}%`);
+        if (error) {
+          throw new Error(error.message);
+        }
+        countsByReference.set(reference, count ?? 0);
+      })
+    );
+  } catch (error) {
+    if (error instanceof Error) {
+      return serverErrorFrom(error.message);
+    }
+    return serverErrorFrom("Erreur lors de la génération des numéros de contrat.");
+  }
+
+  const referenceOffsets = new Map<string, number>();
+  for (const dress of dressRows) {
+    const discountedPrice = Math.max(
+      Number(dress.price) - Number(dress.discount_amount ?? 0),
+      0
+    );
+
+    if (depositPaid > discountedPrice) {
+      return badRequest("L'acompte dépasse le prix total pour au moins une robe.");
+    }
+  }
+
+  const insertPayloads = dressRows.map((dress) => {
+    const discountedPrice = Math.max(
+      Number(dress.price) - Number(dress.discount_amount ?? 0),
+      0
+    );
+
+    const existingCount = countsByReference.get(dress.reference) ?? 0;
+    const offset = referenceOffsets.get(dress.reference) ?? 0;
+    const contractNumber = formatContractNumber(dress.reference, startDate, existingCount + offset);
+    referenceOffsets.set(dress.reference, offset + 1);
+
+    return {
+      contract_number: contractNumber,
+      dress_id: dress.id,
+      client_id: payload.client_id,
+      start_date: payload.start_date,
+      end_date: payload.end_date,
+      status: "reserved",
+      total_price: discountedPrice,
+      deposit_paid: depositPaid,
+      caution_amount: cautionAmount,
+      caution_status: cautionStatus,
+      pickup_datetime: pickupDatetime,
+      return_datetime: returnDatetime,
+      notes,
+      created_by: user.id,
+    };
+  });
+
+  const { data: insertedData, error } = await supabase
     .from("reservations")
-    .select("id", { head: true, count: "exact" })
-    .ilike("contract_number", `${firstContractNumber}%`);
-
-  const contractNumber = formatContractNumber(dressData.reference, startDate, existingCount ?? 0);
-
-  const insertPayload = {
-    contract_number: contractNumber,
-    dress_id: payload.dress_id,
-    client_id: payload.client_id,
-    start_date: payload.start_date,
-    end_date: payload.end_date,
-    status: "reserved",
-    total_price: discountedPrice,
-    deposit_paid:
-      typeof payload.deposit_paid === "number" && payload.deposit_paid >= 0
-        ? payload.deposit_paid
-        : 0,
-    caution_amount:
-      typeof payload.caution_amount === "number" && payload.caution_amount >= 0
-        ? payload.caution_amount
-        : 0,
-    caution_status:
-      typeof payload.caution_status === "string" ? payload.caution_status : "pending",
-    pickup_datetime:
-      typeof payload.pickup_datetime === "string" ? payload.pickup_datetime : null,
-    return_datetime:
-      typeof payload.return_datetime === "string" ? payload.return_datetime : null,
-    notes: typeof payload.notes === "string" ? payload.notes : null,
-    created_by: user.id,
-  };
-
-  const { data, error } = await supabase
-    .from("reservations")
-    .insert(insertPayload)
+    .insert(insertPayloads)
     .select(
       "id, contract_number, dress_id, client_id, start_date, end_date, status, total_price, deposit_paid, balance_due, caution_amount, caution_status, pickup_datetime, return_datetime, notes, created_at, updated_at"
-    )
-    .single();
+    );
 
   if (error) return serverErrorFrom(error.message);
 
-  const syncResult = await syncDressAvailability(supabase, payload.dress_id);
-  if (syncResult.error) return serverErrorFrom(syncResult.error);
+  const syncResults = await Promise.all(
+    uniqueDressIds.map((dressId) => syncDressAvailability(supabase, dressId))
+  );
+  const syncError = syncResults.find((result) => result.error)?.error;
+  if (syncError) return serverErrorFrom(syncError);
 
-  return NextResponse.json({ data }, { status: 201 });
+  return NextResponse.json({ data: insertedData }, { status: 201 });
 }
