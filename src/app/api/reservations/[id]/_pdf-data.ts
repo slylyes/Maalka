@@ -7,7 +7,7 @@ export async function getReservationPdfData(id: string): Promise<ReservationPdfD
   const { data, error } = await supabase
     .from("reservations")
     .select(
-      "id, contract_number, start_date, end_date, status, total_price, deposit_paid, balance_due, caution_amount, caution_status, notes, dresses(reference,name), clients(first_name,last_name,phone,email,address)"
+      "id, contract_number, start_date, end_date, status, total_price, deposit_paid, balance_due, caution_amount, caution_status, notes, dresses(reference,name,price,discount_amount), clients(first_name,last_name,phone,email,address)"
     )
     .eq("id", id)
     .single();
@@ -36,6 +36,8 @@ export async function getReservationPdfData(id: string): Promise<ReservationPdfD
     notes: data.notes,
     dressReference: dress.reference,
     dressName: dress.name,
+    dressBasePrice: dress.price,
+    dressDiscountAmount: Number(dress.discount_amount ?? 0),
     clientFirstName: client.first_name,
     clientLastName: client.last_name,
     clientPhone: client.phone,

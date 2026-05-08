@@ -7,7 +7,7 @@ export default async function DressesPage() {
   const { data } = await supabase
     .from("dresses")
     .select(
-      "id, reference, name, category, price, status, notes, created_at, dress_photos(storage_path,is_primary,created_at)"
+      "id, reference, name, category, price, discount_amount, size, status, notes, created_at, dress_photos(storage_path,is_primary,created_at)"
     )
     .order("created_at", { ascending: false });
 
@@ -29,7 +29,10 @@ export default async function DressesPage() {
         reference: dress.reference,
         name: dress.name,
         category: dress.category,
-        price: dress.price,
+        price: Math.max(Number(dress.price) - Number(dress.discount_amount ?? 0), 0),
+        base_price: Number(dress.price),
+        discount_amount: Number(dress.discount_amount ?? 0),
+        size: dress.size,
         status: dress.status,
         notes: dress.notes,
         primary_photo_url: primaryPhotoUrl,

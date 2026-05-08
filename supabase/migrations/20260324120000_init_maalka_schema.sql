@@ -86,6 +86,8 @@ create table if not exists public.dresses (
   reference text not null unique,
   name text,
   price numeric(10,2) not null check (price >= 0),
+  discount_amount numeric(10,2) not null default 0 check (discount_amount >= 0),
+  size text,
   status dress_status not null default 'available',
   notes text,
   created_by uuid references auth.users(id) on delete set null,

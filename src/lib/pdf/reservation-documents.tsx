@@ -17,6 +17,8 @@ type ReservationPdfData = {
   cautionStatus: string;
   dressReference: string;
   dressName?: string | null;
+  dressBasePrice?: number;
+  dressDiscountAmount?: number;
   clientFirstName: string;
   clientLastName: string;
   clientPhone: string;
@@ -316,6 +318,18 @@ function InvoiceDocument({ data, logoDataUrl }: { data: ReservationPdfData; logo
             Robe {data.dressReference}
             {data.dressName ? ` - ${data.dressName}` : ""}
           </Text>
+          {typeof data.dressBasePrice === "number" ? (
+            <View style={styles.row}>
+              <Text>Prix initial</Text>
+              <Money value={data.dressBasePrice} />
+            </View>
+          ) : null}
+          {typeof data.dressDiscountAmount === "number" && data.dressDiscountAmount > 0 ? (
+            <View style={styles.row}>
+              <Text>Remise</Text>
+              <Money value={data.dressDiscountAmount} />
+            </View>
+          ) : null}
           <View style={styles.row}>
             <Text>Montant location</Text>
             <Money value={data.totalPrice} />

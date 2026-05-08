@@ -98,7 +98,7 @@ export async function POST(request: Request) {
 
   const { data: dressData, error: dressError } = await supabase
     .from("dresses")
-    .select("price, reference")
+    .select("price, discount_amount, reference")
     .eq("id", payload.dress_id)
     .single();
 
@@ -108,6 +108,10 @@ export async function POST(request: Request) {
 
   const startDate = parseStartDate(payload.start_date);
   const firstContractNumber = formatContractNumber(dressData.reference, startDate, 0);
+  const discountedPrice = Math.max(
+    Number(dressData.price) - Number(dressData.discount_amount ?? 0),
+    0
+  );
 
   const { count: existingCount } = await supabase
     .from("reservations")
@@ -123,7 +127,7 @@ export async function POST(request: Request) {
     start_date: payload.start_date,
     end_date: payload.end_date,
     status: "reserved",
-    total_price: Number(dressData.price),
+    total_price: discountedPrice,
     deposit_paid:
       typeof payload.deposit_paid === "number" && payload.deposit_paid >= 0
         ? payload.deposit_paid

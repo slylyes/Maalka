@@ -13,7 +13,7 @@ export default async function ReservationsPage() {
       .order("created_at", { ascending: false }),
     supabase
       .from("dresses")
-      .select("id, reference, name, status, price")
+      .select("id, reference, name, status, price, discount_amount")
       .order("created_at", { ascending: false }),
     supabase
       .from("clients")
@@ -30,7 +30,12 @@ export default async function ReservationsPage() {
   return (
     <ReservationsClient
       initialReservations={normalizedReservations}
-      initialDresses={dressesRes.data ?? []}
+      initialDresses={(dressesRes.data ?? []).map((dress) => ({
+        ...dress,
+        price: Math.max(Number(dress.price) - Number(dress.discount_amount ?? 0), 0),
+        discount_amount: Number(dress.discount_amount ?? 0),
+        base_price: Number(dress.price),
+      }))}
       initialClients={clientsRes.data ?? []}
     />
   );

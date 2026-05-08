@@ -10,6 +10,9 @@ type Dress = {
   name: string | null;
   category: string;
   price: number;
+  base_price: number;
+  discount_amount: number;
+  size: string | null;
   notes: string | null;
   primary_photo_url?: string | null;
 };
@@ -71,6 +74,8 @@ export function DressesClient({ initialDresses }: DressesClientProps) {
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
   const [price, setPrice] = useState("");
+  const [discountAmount, setDiscountAmount] = useState("");
+  const [size, setSize] = useState("");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -218,6 +223,27 @@ export function DressesClient({ initialDresses }: DressesClientProps) {
     setSubmitting(true);
     setError(null);
 
+    const parsedPrice = Number(price);
+    const parsedDiscountAmount = discountAmount.trim().length > 0 ? Number(discountAmount) : 0;
+
+    if (Number.isNaN(parsedPrice) || parsedPrice < 0) {
+      setError("Le prix initial doit être un nombre positif.");
+      setSubmitting(false);
+      return;
+    }
+
+    if (Number.isNaN(parsedDiscountAmount) || parsedDiscountAmount < 0) {
+      setError("La remise doit être un nombre positif.");
+      setSubmitting(false);
+      return;
+    }
+
+    if (parsedDiscountAmount > parsedPrice) {
+      setError("La remise ne peut pas dépasser le prix initial.");
+      setSubmitting(false);
+      return;
+    }
+
     const endpoint = editingDressId ? `/api/dresses/${editingDressId}` : "/api/dresses";
     const method = editingDressId ? "PATCH" : "POST";
 
@@ -228,7 +254,9 @@ export function DressesClient({ initialDresses }: DressesClientProps) {
         reference,
         name,
         category,
-        price: Number(price),
+        price: parsedPrice,
+        discount_amount: parsedDiscountAmount,
+        size,
         notes,
       }),
     });
@@ -245,6 +273,8 @@ export function DressesClient({ initialDresses }: DressesClientProps) {
     setName("");
     setCategory("");
     setPrice("");
+    setDiscountAmount("");
+    setSize("");
     setNotes("");
     setEditingDressId(null);
     setSubmitting(false);
@@ -256,7 +286,9 @@ export function DressesClient({ initialDresses }: DressesClientProps) {
     setReference(dress.reference);
     setName(dress.name ?? "");
     setCategory(dress.category || "");
-    setPrice(String(dress.price));
+    setPrice(String(dress.base_price));
+    setDiscountAmount(String(dress.discount_amount ?? 0));
+    setSize(dress.size ?? "");
     setNotes(dress.notes ?? "");
     setError(null);
   }
@@ -267,6 +299,8 @@ export function DressesClient({ initialDresses }: DressesClientProps) {
     setName("");
     setCategory("");
     setPrice("");
+    setDiscountAmount("");
+    setSize("");
     setNotes("");
     setError(null);
   }
@@ -361,9 +395,24 @@ export function DressesClient({ initialDresses }: DressesClientProps) {
             min={0}
             type="number"
             step="0.01"
-            placeholder="Prix"
+            placeholder="Prix initial"
             value={price}
             onChange={(event) => setPrice(event.target.value)}
+            className="premium-input w-full"
+          />
+          <input
+            min={0}
+            type="number"
+            step="0.01"
+            placeholder="Remise (montant)"
+            value={discountAmount}
+            onChange={(event) => setDiscountAmount(event.target.value)}
+            className="premium-input w-full"
+          />
+          <input
+            placeholder="Taille"
+            value={size}
+            onChange={(event) => setSize(event.target.value)}
             className="premium-input w-full"
           />
           <textarea
@@ -430,7 +479,10 @@ export function DressesClient({ initialDresses }: DressesClientProps) {
                       </p>
                       <p className="mt-1 text-sm text-[var(--muted)]">{dress.name || "Sans nom"}</p>
                       <div className="mt-3 space-y-1 text-sm text-[var(--muted)]">
-                        <p>Prix: {dress.price} DA</p>
+                        <p>Prix initial: {dress.base_price} DA</p>
+                        <p>Remise: {dress.discount_amount} DA</p>
+                        <p>Prix final: {dress.price} DA</p>
+                        <p>Taille: {dress.size || "-"}</p>
                       </div>
                       <div className="mt-4 flex flex-wrap gap-2">
                         <button
