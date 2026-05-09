@@ -23,11 +23,15 @@ export default async function ReservationsPage() {
 
   const normalizedReservations = (reservationsRes.data ?? []).map((reservation) => ({
     ...reservation,
-    reservation_dresses: Array.isArray(reservation.reservation_dresses)
+    reservation_dresses: (Array.isArray(reservation.reservation_dresses)
       ? reservation.reservation_dresses
       : reservation.reservation_dresses
         ? [reservation.reservation_dresses]
-        : [],
+        : []
+    ).map((item) => ({
+      ...item,
+      dresses: Array.isArray(item.dresses) ? item.dresses[0] ?? null : item.dresses,
+    })),
     clients: Array.isArray(reservation.clients) ? reservation.clients[0] ?? null : reservation.clients,
   }));
 
