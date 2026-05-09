@@ -8,7 +8,7 @@ export default async function ReservationsPage() {
     supabase
       .from("reservations")
       .select(
-        "id, contract_number, dress_id, client_id, start_date, end_date, status, total_price, deposit_paid, balance_due, caution_amount, caution_status, dresses(reference,name), clients(first_name,last_name,phone)"
+        "id, contract_number, client_id, start_date, end_date, status, total_price, deposit_paid, balance_due, caution_amount, caution_status, reservation_dresses(dress_id, price, base_price, discount_amount, dresses(reference,name)), clients(first_name,last_name,phone)"
       )
       .order("created_at", { ascending: false }),
     supabase
@@ -23,7 +23,11 @@ export default async function ReservationsPage() {
 
   const normalizedReservations = (reservationsRes.data ?? []).map((reservation) => ({
     ...reservation,
-    dresses: Array.isArray(reservation.dresses) ? reservation.dresses[0] ?? null : reservation.dresses,
+    reservation_dresses: Array.isArray(reservation.reservation_dresses)
+      ? reservation.reservation_dresses
+      : reservation.reservation_dresses
+        ? [reservation.reservation_dresses]
+        : [],
     clients: Array.isArray(reservation.clients) ? reservation.clients[0] ?? null : reservation.clients,
   }));
 

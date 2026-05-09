@@ -27,7 +27,7 @@ async function syncDressAvailability(
   const today = new Date().toISOString().slice(0, 10);
 
   const { count, error: countError } = await supabase
-    .from("reservations")
+    .from("reservation_dresses")
     .select("id", { head: true, count: "exact" })
     .eq("dress_id", dressId)
     .in("status", [...blockingStatuses])
@@ -59,7 +59,7 @@ export async function GET() {
   const { data, error } = await supabase
     .from("reservations")
     .select(
-      "id, contract_number, dress_id, client_id, start_date, end_date, status, total_price, deposit_paid, balance_due, caution_amount, caution_status, pickup_datetime, return_datetime, notes, created_at, updated_at, dresses(reference,name), clients(first_name,last_name,phone,email)"
+      "id, contract_number, client_id, start_date, end_date, status, total_price, deposit_paid, balance_due, caution_amount, caution_status, pickup_datetime, return_datetime, notes, created_at, updated_at, reservation_dresses(dress_id, price, base_price, discount_amount, dresses(reference,name)), clients(first_name,last_name,phone,email)"
     )
     .order("created_at", { ascending: false });
 
@@ -105,7 +105,7 @@ export async function POST(request: Request) {
   const startDate = parseStartDate(payload.start_date);
   const { data: dressRows, error: dressError } = await supabase
     .from("dresses")
-    .select("id, price, discount_amount, reference")
+    .select("id, price, discount_amount, reference, name")
     .in("id", uniqueDressIds);
 
   if (dressError || !dressRows || dressRows.length === 0) {
@@ -129,61 +129,48 @@ export async function POST(request: Request) {
   const returnDatetime = typeof payload.return_datetime === "string" ? payload.return_datetime : null;
   const notes = typeof payload.notes === "string" ? payload.notes : null;
 
-  const uniqueReferences = Array.from(new Set(dressRows.map((dress) => dress.reference)));
-  const countsByReference = new Map<string, number>();
+  const dressMap = new Map(dressRows.map((dress) => [dress.id, dress]));
+  const orderedDressRows = uniqueDressIds
+    .map((id) => dressMap.get(id))
+    .filter((dress): dress is (typeof dressRows)[number] => Boolean(dress));
 
-  try {
-    await Promise.all(
-      uniqueReferences.map(async (reference) => {
-        const firstContractNumber = formatContractNumber(reference, startDate, 0);
-        const { count, error } = await supabase
-          .from("reservations")
-          .select("id", { head: true, count: "exact" })
-          .ilike("contract_number", `${firstContractNumber}%`);
-        if (error) {
-          throw new Error(error.message);
-        }
-        countsByReference.set(reference, count ?? 0);
-      })
-    );
-  } catch (error) {
-    if (error instanceof Error) {
-      return serverErrorFrom(error.message);
-    }
-    return serverErrorFrom("Erreur lors de la génération des numéros de contrat.");
+  const firstDress = orderedDressRows[0];
+  if (!firstDress) {
+    return badRequest("Impossible de déterminer la première robe sélectionnée.");
   }
 
-  const referenceOffsets = new Map<string, number>();
-  for (const dress of dressRows) {
+  const totalPrice = orderedDressRows.reduce((sum, dress) => {
     const discountedPrice = Math.max(
       Number(dress.price) - Number(dress.discount_amount ?? 0),
       0
     );
+    return sum + discountedPrice;
+  }, 0);
 
-    if (depositPaid > discountedPrice) {
-      return badRequest("L'acompte dépasse le prix total pour au moins une robe.");
-    }
+  if (depositPaid > totalPrice) {
+    return badRequest("L'acompte dépasse le prix total de la réservation.");
   }
 
-  const insertPayloads = dressRows.map((dress) => {
-    const discountedPrice = Math.max(
-      Number(dress.price) - Number(dress.discount_amount ?? 0),
-      0
-    );
+  const firstContractNumber = formatContractNumber(firstDress.reference, startDate, 0);
+  const { count: existingCount, error: countError } = await supabase
+    .from("reservations")
+    .select("id", { head: true, count: "exact" })
+    .ilike("contract_number", `${firstContractNumber}%`);
 
-    const existingCount = countsByReference.get(dress.reference) ?? 0;
-    const offset = referenceOffsets.get(dress.reference) ?? 0;
-    const contractNumber = formatContractNumber(dress.reference, startDate, existingCount + offset);
-    referenceOffsets.set(dress.reference, offset + 1);
+  if (countError) return serverErrorFrom(countError.message);
 
-    return {
+  const contractNumber = formatContractNumber(firstDress.reference, startDate, existingCount ?? 0);
+
+  const { data: reservation, error: reservationError } = await supabase
+    .from("reservations")
+    .insert({
       contract_number: contractNumber,
-      dress_id: dress.id,
+      dress_id: firstDress.id,
       client_id: payload.client_id,
       start_date: payload.start_date,
       end_date: payload.end_date,
       status: "reserved",
-      total_price: discountedPrice,
+      total_price: totalPrice,
       deposit_paid: depositPaid,
       caution_amount: cautionAmount,
       caution_status: cautionStatus,
@@ -191,17 +178,40 @@ export async function POST(request: Request) {
       return_datetime: returnDatetime,
       notes,
       created_by: user.id,
+    })
+    .select(
+      "id, contract_number, client_id, start_date, end_date, status, total_price, deposit_paid, balance_due, caution_amount, caution_status, pickup_datetime, return_datetime, notes, created_at, updated_at"
+    )
+    .single();
+
+  if (reservationError || !reservation) return serverErrorFrom(reservationError?.message ?? "Erreur serveur");
+
+  const dressItems = orderedDressRows.map((dress) => {
+    const discountedPrice = Math.max(
+      Number(dress.price) - Number(dress.discount_amount ?? 0),
+      0
+    );
+
+    return {
+      reservation_id: reservation.id,
+      dress_id: dress.id,
+      start_date: payload.start_date,
+      end_date: payload.end_date,
+      status: reservation.status,
+      price: discountedPrice,
+      base_price: Number(dress.price),
+      discount_amount: Number(dress.discount_amount ?? 0),
     };
   });
 
-  const { data: insertedData, error } = await supabase
-    .from("reservations")
-    .insert(insertPayloads)
-    .select(
-      "id, contract_number, dress_id, client_id, start_date, end_date, status, total_price, deposit_paid, balance_due, caution_amount, caution_status, pickup_datetime, return_datetime, notes, created_at, updated_at"
-    );
+  const { error: itemsError } = await supabase
+    .from("reservation_dresses")
+    .insert(dressItems);
 
-  if (error) return serverErrorFrom(error.message);
+  if (itemsError) {
+    await supabase.from("reservations").delete().eq("id", reservation.id);
+    return serverErrorFrom(itemsError.message);
+  }
 
   const syncResults = await Promise.all(
     uniqueDressIds.map((dressId) => syncDressAvailability(supabase, dressId))
@@ -209,5 +219,5 @@ export async function POST(request: Request) {
   const syncError = syncResults.find((result) => result.error)?.error;
   if (syncError) return serverErrorFrom(syncError);
 
-  return NextResponse.json({ data: insertedData }, { status: 201 });
+  return NextResponse.json({ data: reservation }, { status: 201 });
 }

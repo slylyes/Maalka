@@ -17,7 +17,7 @@ export async function GET() {
     supabase
       .from("reservations")
       .select(
-        "id, contract_number, start_date, status, total_price, balance_due, dresses(reference,name), clients(first_name,last_name,phone)"
+        "id, contract_number, start_date, status, total_price, balance_due, reservation_dresses(dress_id, dresses(reference,name)), clients(first_name,last_name,phone)"
       )
       .eq("start_date", today)
       .in("status", ["reserved", "preparing", "rented"])
@@ -25,7 +25,7 @@ export async function GET() {
     supabase
       .from("reservations")
       .select(
-        "id, contract_number, end_date, status, total_price, balance_due, dresses(reference,name), clients(first_name,last_name,phone)"
+        "id, contract_number, end_date, status, total_price, balance_due, reservation_dresses(dress_id, dresses(reference,name)), clients(first_name,last_name,phone)"
       )
       .eq("end_date", today)
       .in("status", ["reserved", "preparing", "rented"])
@@ -37,13 +37,21 @@ export async function GET() {
 
   const pickups = (pickupsRes.data ?? []).map((item) => ({
     ...item,
-    dresses: normalizeRelation(item.dresses),
+    reservation_dresses: Array.isArray(item.reservation_dresses)
+      ? item.reservation_dresses
+      : item.reservation_dresses
+        ? [item.reservation_dresses]
+        : [],
     clients: normalizeRelation(item.clients),
   }));
 
   const returns = (returnsRes.data ?? []).map((item) => ({
     ...item,
-    dresses: normalizeRelation(item.dresses),
+    reservation_dresses: Array.isArray(item.reservation_dresses)
+      ? item.reservation_dresses
+      : item.reservation_dresses
+        ? [item.reservation_dresses]
+        : [],
     clients: normalizeRelation(item.clients),
   }));
 

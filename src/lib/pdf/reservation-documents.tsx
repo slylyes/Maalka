@@ -15,10 +15,13 @@ type ReservationPdfData = {
   balanceDue: number;
   cautionAmount: number;
   cautionStatus: string;
-  dressReference: string;
-  dressName?: string | null;
-  dressBasePrice?: number;
-  dressDiscountAmount?: number;
+  dressItems: Array<{
+    reference: string;
+    name?: string | null;
+    basePrice: number;
+    discountAmount: number;
+    price: number;
+  }>;
   clientFirstName: string;
   clientLastName: string;
   clientPhone: string;
@@ -200,6 +203,10 @@ function Header({ title, contractNumber, logoDataUrl }: { title: string; contrac
 }
 
 function ContractDocument({ data, logoDataUrl }: { data: ReservationPdfData; logoDataUrl: string | null }) {
+  const dressesLabel = data.dressItems
+    .map((item) => (item.name ? `${item.reference} - ${item.name}` : item.reference))
+    .join(", ");
+
   return (
     <Document>
       <Page size="A4" style={styles.page}>
@@ -218,10 +225,7 @@ function ContractDocument({ data, logoDataUrl }: { data: ReservationPdfData; log
 
           <View style={[styles.section, styles.col]}>
             <Text style={styles.sectionTitle}>Location</Text>
-            <Text>
-              Robe: {data.dressReference}
-              {data.dressName ? ` - ${data.dressName}` : ""}
-            </Text>
+            <Text>Robes: {dressesLabel || "-"}</Text>
             <Text>
               Période: {formatDateFr(data.startDate)} au {formatDateFr(data.endDate)}
             </Text>
@@ -281,6 +285,10 @@ function ContractDocument({ data, logoDataUrl }: { data: ReservationPdfData; log
 }
 
 function InvoiceDocument({ data, logoDataUrl }: { data: ReservationPdfData; logoDataUrl: string | null }) {
+  const dressesLabel = data.dressItems
+    .map((item) => (item.name ? `${item.reference} - ${item.name}` : item.reference))
+    .join(", ");
+
   return (
     <Document>
       <Page size="A4" style={styles.page}>
@@ -301,10 +309,7 @@ function InvoiceDocument({ data, logoDataUrl }: { data: ReservationPdfData; logo
             <Text>
               {formatDateFr(data.startDate)} au {formatDateFr(data.endDate)}
             </Text>
-            <Text>
-              {data.dressReference}
-              {data.dressName ? ` - ${data.dressName}` : ""}
-            </Text>
+            <Text>{dressesLabel || "-"}</Text>
           </View>
         </View>
 
@@ -314,26 +319,32 @@ function InvoiceDocument({ data, logoDataUrl }: { data: ReservationPdfData; logo
             <Text style={styles.cellLabel}>Désignation</Text>
             <Text style={styles.cellValue}>Montant</Text>
           </View>
-          <Text>
-            Robe {data.dressReference}
-            {data.dressName ? ` - ${data.dressName}` : ""}
-          </Text>
-          {typeof data.dressBasePrice === "number" ? (
-            <View style={styles.row}>
-              <Text>Prix initial</Text>
-              <Money value={data.dressBasePrice} />
-            </View>
-          ) : null}
-          {typeof data.dressDiscountAmount === "number" && data.dressDiscountAmount > 0 ? (
-            <View style={styles.row}>
-              <Text>Remise</Text>
-              <Money value={data.dressDiscountAmount} />
-            </View>
-          ) : null}
-          <View style={styles.row}>
-            <Text>Montant location</Text>
-            <Money value={data.totalPrice} />
-          </View>
+          {data.dressItems.length ? (
+            data.dressItems.map((item, index) => (
+              <View key={`${item.reference}-${index}`}>
+                <Text>
+                  Robe {item.reference}
+                  {item.name ? ` - ${item.name}` : ""}
+                </Text>
+                <View style={styles.row}>
+                  <Text>Prix initial</Text>
+                  <Money value={item.basePrice} />
+                </View>
+                {item.discountAmount > 0 ? (
+                  <View style={styles.row}>
+                    <Text>Remise</Text>
+                    <Money value={item.discountAmount} />
+                  </View>
+                ) : null}
+                <View style={styles.row}>
+                  <Text>Montant location</Text>
+                  <Money value={item.price} />
+                </View>
+              </View>
+            ))
+          ) : (
+            <Text>Aucune robe associée.</Text>
+          )}
           <View style={styles.row}>
             <Text>Acompte</Text>
             <Money value={data.depositPaid} />

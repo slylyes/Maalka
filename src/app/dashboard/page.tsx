@@ -39,7 +39,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const periodStart = periodStartDate.toISOString().slice(0, 10);
 
   const { data: activeDressRows } = await supabase
-    .from("reservations")
+    .from("reservation_dresses")
     .select("dress_id")
     .in("status", ["reserved", "rented", "preparing"])
     .lte("start_date", today)
@@ -68,11 +68,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     { count: activeReservations },
     { data: upcomingReservations },
     { data: periodReservations },
+    { data: periodDressRows },
   ] = await Promise.all([
     supabase
       .from("reservations")
       .select(
-        "id, contract_number, start_date, status, total_price, balance_due, dresses(reference,name), clients(first_name,last_name,phone)"
+        "id, contract_number, start_date, status, total_price, balance_due, reservation_dresses(dress_id, dresses(reference,name)), clients(first_name,last_name,phone)"
       )
       .eq("start_date", today)
       .in("status", ["reserved", "preparing", "rented"])
@@ -80,7 +81,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     supabase
       .from("reservations")
       .select(
-        "id, contract_number, end_date, status, dresses(reference,name), clients(first_name,last_name,phone)"
+        "id, contract_number, end_date, status, reservation_dresses(dress_id, dresses(reference,name)), clients(first_name,last_name,phone)"
       )
       .eq("end_date", today)
       .in("status", ["reserved", "preparing", "rented"])
@@ -99,7 +100,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     supabase
       .from("reservations")
       .select(
-        "id, contract_number, start_date, end_date, status, dresses(reference,name), clients(first_name,last_name)"
+        "id, contract_number, start_date, end_date, status, reservation_dresses(dress_id, dresses(reference,name)), clients(first_name,last_name)"
       )
       .gte("start_date", today)
       .in("status", ["reserved", "preparing", "rented"])
@@ -107,7 +108,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       .limit(5),
     supabase
       .from("reservations")
-      .select("id, dress_id, start_date, status, total_price, deposit_paid, balance_due, dresses(reference,name)")
+      .select("id, start_date, status, total_price, deposit_paid, balance_due")
+      .gte("start_date", periodStart)
+      .lte("start_date", today)
+      .order("start_date", { ascending: true }),
+    supabase
+      .from("reservation_dresses")
+      .select("dress_id, start_date, status, price, dresses(reference,name)")
       .gte("start_date", periodStart)
       .lte("start_date", today)
       .order("start_date", { ascending: true }),
@@ -120,6 +127,25 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       return value[0];
     }
     return value;
+  };
+
+  const formatDressList = (
+    items:
+      | Array<{
+          dresses?: { reference?: string; name?: string } | { reference?: string; name?: string }[] | null;
+        }>
+      | null
+      | undefined
+  ) => {
+    if (!items || items.length === 0) return "-";
+    const labels = items.map((item) => {
+      const dress = firstRelation(item.dresses as { reference?: string; name?: string } | { reference?: string; name?: string }[] | null);
+      if (!dress) return "Robe";
+      const labelBase = dress.reference ? dress.reference : "Robe";
+      return dress.name ? `${labelBase} - ${dress.name}` : labelBase;
+    });
+    if (labels.length <= 2) return labels.join(", ");
+    return `${labels[0]}, ${labels[1]} +${labels.length - 2}`;
   };
 
   const expectedTurnoverToday =
@@ -143,15 +169,19 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   const topDressesMap = new Map<string, { label: string; count: number; turnover: number }>();
 
-  for (const reservation of analyticRows) {
-    const dress = firstRelation(reservation.dresses);
-    const key = reservation.dress_id;
+  const analyticDressRows = (periodDressRows ?? []).filter(
+    (row) => row.status !== "cancelled" && row.status !== "draft"
+  );
+
+  for (const row of analyticDressRows) {
+    const dress = firstRelation(row.dresses);
+    const key = row.dress_id;
     const labelBase = dress?.reference ? dress.reference : "Robe";
     const label = dress?.name ? `${labelBase} - ${dress.name}` : labelBase;
 
     const current = topDressesMap.get(key) ?? { label, count: 0, turnover: 0 };
     current.count += 1;
-    current.turnover += Number(reservation.total_price ?? 0);
+    current.turnover += Number(row.price ?? 0);
     topDressesMap.set(key, current);
   }
 
@@ -370,14 +400,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             pickups.map((item) => (
               <li key={item.id} className="rounded-xl border border-[var(--border-soft)] bg-white p-3">
                 {(() => {
-                  const dress = firstRelation(item.dresses);
                   const client = firstRelation(item.clients);
 
                   return (
                     <>
                         <p className="font-medium text-[var(--foreground)]">{item.contract_number}</p>
                         <p className="mt-1">
-                        Robe: {dress?.reference} {dress?.name ? `- ${dress.name}` : ""}
+                        Robes: {formatDressList(item.reservation_dresses)}
                         </p>
                         <p>
                         Client: {client?.first_name} {client?.last_name}
@@ -402,14 +431,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             returns.map((item) => (
               <li key={item.id} className="rounded-xl border border-[var(--border-soft)] bg-white p-3">
                 {(() => {
-                  const dress = firstRelation(item.dresses);
                   const client = firstRelation(item.clients);
 
                   return (
                     <>
                         <p className="font-medium text-[var(--foreground)]">{item.contract_number}</p>
                         <p className="mt-1">
-                        Robe: {dress?.reference} {dress?.name ? `- ${dress.name}` : ""}
+                        Robes: {formatDressList(item.reservation_dresses)}
                         </p>
                         <p>
                         Client: {client?.first_name} {client?.last_name}
@@ -434,7 +462,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             upcomingReservations.map((item) => (
               <li key={item.id} className="rounded-xl border border-[var(--border-soft)] bg-white p-3">
                 {(() => {
-                  const dress = firstRelation(item.dresses);
                   const client = firstRelation(item.clients);
 
                   return (
@@ -444,7 +471,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                         {formatDateFr(item.start_date)} → {formatDateFr(item.end_date)} ({item.status})
                       </p>
                       <p>
-                        Robe: {dress?.reference} {dress?.name ? `- ${dress.name}` : ""}
+                        Robes: {formatDressList(item.reservation_dresses)}
                       </p>
                       <p>
                         Client: {client?.first_name} {client?.last_name}

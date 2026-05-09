@@ -31,9 +31,9 @@ export async function GET(request: Request, { params }: Params) {
   const { startDate, endDate, normalizedMonth } = monthBoundaries(month);
 
   const { data, error } = await supabase
-    .from("reservations")
+    .from("reservation_dresses")
     .select(
-      "id, contract_number, start_date, end_date, status, clients(first_name,last_name)"
+      "id, start_date, end_date, status, reservations(contract_number, clients(first_name,last_name))"
     )
     .eq("dress_id", dressId)
     .lte("start_date", endDate)
@@ -43,10 +43,15 @@ export async function GET(request: Request, { params }: Params) {
   if (error) return serverError(error.message);
 
   const normalized = (data ?? []).map((item) => {
-    const client = Array.isArray(item.clients) ? item.clients[0] : item.clients;
+    const reservation = Array.isArray(item.reservations) ? item.reservations[0] : item.reservations;
+    const client = reservation
+      ? Array.isArray(reservation.clients)
+        ? reservation.clients[0]
+        : reservation.clients
+      : null;
     return {
       id: item.id,
-      contract_number: item.contract_number,
+      contract_number: reservation?.contract_number ?? "",
       start_date: item.start_date,
       end_date: item.end_date,
       status: item.status,

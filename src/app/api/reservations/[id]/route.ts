@@ -10,7 +10,7 @@ async function syncDressAvailability(supabase: Awaited<ReturnType<typeof require
   const today = new Date().toISOString().slice(0, 10);
 
   const { count, error: countError } = await supabase
-    .from("reservations")
+    .from("reservation_dresses")
     .select("id", { head: true, count: "exact" })
     .eq("dress_id", dressId)
     .in("status", [...blockingStatuses])
@@ -43,7 +43,7 @@ export async function GET(_: Request, { params }: Params) {
   const { data, error } = await supabase
     .from("reservations")
     .select(
-      "id, contract_number, dress_id, client_id, start_date, end_date, status, total_price, deposit_paid, balance_due, caution_amount, caution_status, pickup_datetime, return_datetime, notes, created_at, updated_at, dresses(reference,name), clients(first_name,last_name,phone,email,address)"
+      "id, contract_number, client_id, start_date, end_date, status, total_price, deposit_paid, balance_due, caution_amount, caution_status, pickup_datetime, return_datetime, notes, created_at, updated_at, reservation_dresses(dress_id, price, base_price, discount_amount, dresses(reference,name)), clients(first_name,last_name,phone,email,address)"
     )
     .eq("id", id)
     .single();
@@ -57,13 +57,13 @@ export async function PATCH(request: Request, { params }: Params) {
   const { supabase, unauthorizedResponse } = await requireAuthenticatedUser();
   if (unauthorizedResponse) return unauthorizedResponse;
 
-  const { data: currentReservation, error: currentError } = await supabase
+  const { error: currentError } = await supabase
     .from("reservations")
-    .select("id, dress_id")
+    .select("id")
     .eq("id", id)
     .single();
 
-  if (currentError || !currentReservation) {
+  if (currentError) {
     return serverErrorFrom(currentError?.message ?? "Réservation introuvable.");
   }
 
@@ -74,7 +74,6 @@ export async function PATCH(request: Request, { params }: Params) {
 
   const updatePayload: Record<string, unknown> = {};
 
-  if (typeof payload.dress_id === "string") updatePayload.dress_id = payload.dress_id;
   if (typeof payload.client_id === "string") updatePayload.client_id = payload.client_id;
   if (typeof payload.start_date === "string") updatePayload.start_date = payload.start_date;
   if (typeof payload.end_date === "string") updatePayload.end_date = payload.end_date;
@@ -102,13 +101,34 @@ export async function PATCH(request: Request, { params }: Params) {
     .update(updatePayload)
     .eq("id", id)
     .select(
-      "id, contract_number, dress_id, client_id, start_date, end_date, status, total_price, deposit_paid, balance_due, caution_amount, caution_status, pickup_datetime, return_datetime, notes, created_at, updated_at"
+      "id, contract_number, client_id, start_date, end_date, status, total_price, deposit_paid, balance_due, caution_amount, caution_status, pickup_datetime, return_datetime, notes, created_at, updated_at"
     )
     .single();
 
   if (error) return serverErrorFrom(error.message);
 
-  const dressIdsToSync = new Set<string>([currentReservation.dress_id, data.dress_id]);
+  const dressUpdatePayload: Record<string, unknown> = {};
+  if (typeof updatePayload.start_date === "string") dressUpdatePayload.start_date = updatePayload.start_date;
+  if (typeof updatePayload.end_date === "string") dressUpdatePayload.end_date = updatePayload.end_date;
+  if (typeof updatePayload.status === "string") dressUpdatePayload.status = updatePayload.status;
+
+  if (Object.keys(dressUpdatePayload).length > 0) {
+    const { error: dressUpdateError } = await supabase
+      .from("reservation_dresses")
+      .update(dressUpdatePayload)
+      .eq("reservation_id", id);
+
+    if (dressUpdateError) return serverErrorFrom(dressUpdateError.message);
+  }
+
+  const { data: linkedDressRows, error: linkedError } = await supabase
+    .from("reservation_dresses")
+    .select("dress_id")
+    .eq("reservation_id", id);
+
+  if (linkedError) return serverErrorFrom(linkedError.message);
+
+  const dressIdsToSync = new Set<string>((linkedDressRows ?? []).map((row) => row.dress_id));
   for (const dressId of dressIdsToSync) {
     const syncResult = await syncDressAvailability(supabase, dressId);
     if (syncResult.error) return serverErrorFrom(syncResult.error);
@@ -122,21 +142,31 @@ export async function DELETE(_: Request, { params }: Params) {
   const { supabase, unauthorizedResponse } = await requireAuthenticatedUser();
   if (unauthorizedResponse) return unauthorizedResponse;
 
-  const { data: currentReservation, error: currentError } = await supabase
+  const { error: currentError } = await supabase
     .from("reservations")
-    .select("id, dress_id")
+    .select("id")
     .eq("id", id)
     .single();
 
-  if (currentError || !currentReservation) {
+  if (currentError) {
     return serverErrorFrom(currentError?.message ?? "Réservation introuvable.");
   }
+
+  const { data: linkedDressRows, error: linkedError } = await supabase
+    .from("reservation_dresses")
+    .select("dress_id")
+    .eq("reservation_id", id);
+
+  if (linkedError) return serverErrorFrom(linkedError.message);
 
   const { error } = await supabase.from("reservations").delete().eq("id", id);
   if (error) return serverErrorFrom(error.message);
 
-  const syncResult = await syncDressAvailability(supabase, currentReservation.dress_id);
-  if (syncResult.error) return serverErrorFrom(syncResult.error);
+  const dressIdsToSync = new Set<string>((linkedDressRows ?? []).map((row) => row.dress_id));
+  for (const dressId of dressIdsToSync) {
+    const syncResult = await syncDressAvailability(supabase, dressId);
+    if (syncResult.error) return serverErrorFrom(syncResult.error);
+  }
 
   return NextResponse.json({ success: true });
 }

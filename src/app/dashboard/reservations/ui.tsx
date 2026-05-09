@@ -22,7 +22,6 @@ type ClientOption = { id: string; first_name: string; last_name: string; phone: 
 type Reservation = {
   id: string;
   contract_number: string;
-  dress_id: string;
   client_id: string;
   start_date: string;
   end_date: string;
@@ -32,7 +31,13 @@ type Reservation = {
   balance_due: number;
   caution_amount: number;
   caution_status: string;
-  dresses?: { reference?: string; name?: string } | null;
+  reservation_dresses?: Array<{
+    dress_id: string;
+    price: number;
+    base_price?: number | null;
+    discount_amount?: number | null;
+    dresses?: { reference?: string; name?: string } | null;
+  }> | null;
   clients?: { first_name?: string; last_name?: string; phone?: string } | null;
 };
 
@@ -68,6 +73,19 @@ export function ReservationsClient({
   const totalPriceValue = selectedDresses.reduce((total, dress) => total + Number(dress.price || 0), 0);
   const totalPrice = selectedDresses.length ? totalPriceValue.toFixed(2) : "";
 
+  const formatReservationDresses = (reservation: Reservation) => {
+    const items = reservation.reservation_dresses ?? [];
+    if (!items.length) return "-";
+    const labels = items.map((item) => {
+      const dress = item.dresses;
+      if (!dress) return "Robe";
+      const namePart = dress.name ? `- ${dress.name}` : "";
+      return `${dress.reference ?? "Robe"} ${namePart}`.trim();
+    });
+    if (labels.length <= 2) return labels.join(", ");
+    return `${labels[0]}, ${labels[1]} +${labels.length - 2}`;
+  };
+
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -89,7 +107,15 @@ export function ReservationsClient({
       return;
     }
 
-    setReservations(reservationsJson.data ?? []);
+    const normalizedReservations = (reservationsJson.data ?? []).map((reservation: Reservation) => ({
+      ...reservation,
+      reservation_dresses: Array.isArray(reservation.reservation_dresses)
+        ? reservation.reservation_dresses
+        : reservation.reservation_dresses
+          ? [reservation.reservation_dresses]
+          : [],
+    }));
+    setReservations(normalizedReservations);
     setDresses(dressesJson.data ?? []);
     setClients(clientsJson.data ?? []);
     setLoading(false);
@@ -197,7 +223,7 @@ export function ReservationsClient({
           <div className="rounded-xl border border-[var(--border-soft)] bg-[var(--surface-soft)] p-3">
             <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">Robes ajoutées</p>
             {selectedDresses.length === 0 ? (
-              <p className="mt-2 text-sm text-[var(--muted)]">Aucune robe ajoutée pour l'instant.</p>
+              <p className="mt-2 text-sm text-[var(--muted)]">Aucune robe ajoutée pour l&apos;instant.</p>
             ) : (
               <ul className="mt-2 space-y-2">
                 {selectedDresses.map((dress) => (
@@ -263,7 +289,7 @@ export function ReservationsClient({
             min={0}
             type="number"
             step="0.01"
-            placeholder="Acompte payé par robe (DA)"
+            placeholder="Acompte total (DA)"
             value={depositPaid}
             onChange={(event) => setDepositPaid(event.target.value)}
             className="premium-input w-full"
@@ -272,7 +298,7 @@ export function ReservationsClient({
             min={0}
             type="number"
             step="0.01"
-            placeholder="Montant caution par robe (DA)"
+            placeholder="Montant caution total (DA)"
             value={cautionAmount}
             onChange={(event) => setCautionAmount(event.target.value)}
             className="premium-input w-full"
@@ -329,7 +355,7 @@ export function ReservationsClient({
                   <td className="py-4 pr-4">
                     {reservation.clients?.first_name} {reservation.clients?.last_name}
                   </td>
-                  <td className="py-4 pr-4">{reservation.dresses?.reference}</td>
+                  <td className="py-4 pr-4">{formatReservationDresses(reservation)}</td>
                   <td className="py-4 pr-4">
                     <div>Total: {reservation.total_price} DA</div>
                     <div>Acompte: {reservation.deposit_paid} DA</div>

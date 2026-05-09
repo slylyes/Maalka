@@ -223,6 +223,7 @@ alter table public.dresses enable row level security;
 alter table public.dress_photos enable row level security;
 alter table public.clients enable row level security;
 alter table public.reservations enable row level security;
+alter table public.reservation_dresses enable row level security;
 alter table public.reservation_documents enable row level security;
 
 do $$ begin
@@ -260,6 +261,14 @@ exception when duplicate_object then null; end $$;
 do $$ begin
   create policy "reservations_authenticated_all"
     on public.reservations for all
+    to authenticated
+    using (true)
+    with check (true);
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create policy "reservation_dresses_authenticated_all"
+    on public.reservation_dresses for all
     to authenticated
     using (true)
     with check (true);

@@ -7,7 +7,7 @@ export async function getReservationPdfData(id: string): Promise<ReservationPdfD
   const { data, error } = await supabase
     .from("reservations")
     .select(
-      "id, contract_number, start_date, end_date, status, total_price, deposit_paid, balance_due, caution_amount, caution_status, notes, dresses(reference,name,price,discount_amount), clients(first_name,last_name,phone,email,address)"
+      "id, contract_number, start_date, end_date, status, total_price, deposit_paid, balance_due, caution_amount, caution_status, notes, reservation_dresses(price, base_price, discount_amount, dresses(reference,name)), clients(first_name,last_name,phone,email,address)"
     )
     .eq("id", id)
     .single();
@@ -16,12 +16,22 @@ export async function getReservationPdfData(id: string): Promise<ReservationPdfD
     return null;
   }
 
-  const dress = Array.isArray(data.dresses) ? data.dresses[0] : data.dresses;
   const client = Array.isArray(data.clients) ? data.clients[0] : data.clients;
 
-  if (!dress || !client) {
+  if (!client) {
     return null;
   }
+
+  const dressItems = (data.reservation_dresses ?? []).map((item) => {
+    const dress = Array.isArray(item.dresses) ? item.dresses[0] : item.dresses;
+    return {
+      reference: dress?.reference ?? "",
+      name: dress?.name ?? null,
+      basePrice: Number(item.base_price ?? 0),
+      discountAmount: Number(item.discount_amount ?? 0),
+      price: Number(item.price ?? 0),
+    };
+  });
 
   return {
     contractNumber: data.contract_number,
@@ -34,10 +44,7 @@ export async function getReservationPdfData(id: string): Promise<ReservationPdfD
     cautionAmount: data.caution_amount,
     cautionStatus: data.caution_status,
     notes: data.notes,
-    dressReference: dress.reference,
-    dressName: dress.name,
-    dressBasePrice: dress.price,
-    dressDiscountAmount: Number(dress.discount_amount ?? 0),
+    dressItems,
     clientFirstName: client.first_name,
     clientLastName: client.last_name,
     clientPhone: client.phone,
