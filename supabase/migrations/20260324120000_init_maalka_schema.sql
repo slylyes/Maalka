@@ -154,6 +154,7 @@ create table if not exists public.reservations (
   status reservation_status not null default 'reserved',
 
   total_price numeric(10,2) not null check (total_price >= 0),
+  discount_amount numeric(10,2) not null default 0 check (discount_amount >= 0),
   deposit_paid numeric(10,2) not null default 0 check (deposit_paid >= 0),
   balance_due numeric(10,2) generated always as (greatest(total_price - deposit_paid, 0)) stored,
 

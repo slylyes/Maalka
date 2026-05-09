@@ -14,8 +14,6 @@ type DressOption = {
   name: string | null;
   status: string;
   price: number;
-  base_price?: number;
-  discount_amount?: number;
 };
 type ClientOption = { id: string; first_name: string; last_name: string; phone: string };
 
@@ -64,13 +62,17 @@ export function ReservationsClient({
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [depositPaid, setDepositPaid] = useState("");
+  const [discountAmount, setDiscountAmount] = useState("");
   const [cautionAmount, setCautionAmount] = useState("");
   const [cautionStatus, setCautionStatus] = useState("pending");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const selectedDresses = dresses.filter((dress) => dressIds.includes(dress.id));
-  const totalPriceValue = selectedDresses.reduce((total, dress) => total + Number(dress.price || 0), 0);
+  const baseTotalValue = selectedDresses.reduce((total, dress) => total + Number(dress.price || 0), 0);
+  const parsedDiscount = discountAmount.trim().length > 0 ? Number(discountAmount) : 0;
+  const safeDiscount = Number.isFinite(parsedDiscount) ? Math.max(parsedDiscount, 0) : 0;
+  const totalPriceValue = Math.max(baseTotalValue - safeDiscount, 0);
   const totalPrice = selectedDresses.length ? totalPriceValue.toFixed(2) : "";
 
   const formatReservationDresses = (reservation: Reservation) => {
@@ -132,6 +134,12 @@ export function ReservationsClient({
       return;
     }
 
+    if (safeDiscount > baseTotalValue) {
+      setError("La remise ne peut pas dépasser le prix total.");
+      setSubmitting(false);
+      return;
+    }
+
     const response = await fetch("/api/reservations", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -140,6 +148,7 @@ export function ReservationsClient({
         client_id: clientId,
         start_date: startDate,
         end_date: endDate,
+        discount_amount: safeDiscount,
         deposit_paid: depositPaid.trim().length > 0 ? Number(depositPaid) : 0,
         caution_amount: cautionAmount.trim().length > 0 ? Number(cautionAmount) : 0,
         caution_status: cautionStatus,
@@ -161,6 +170,7 @@ export function ReservationsClient({
     setStartDate("");
     setEndDate("");
     setDepositPaid("");
+    setDiscountAmount("");
     setCautionAmount("");
     setCautionStatus("pending");
     setNotes("");
@@ -283,6 +293,15 @@ export function ReservationsClient({
             type="text"
             placeholder="Prix total (auto)"
             value={totalPrice}
+            className="premium-input w-full"
+          />
+          <input
+            min={0}
+            type="number"
+            step="0.01"
+            placeholder="Remise (DA)"
+            value={discountAmount}
+            onChange={(event) => setDiscountAmount(event.target.value)}
             className="premium-input w-full"
           />
           <input

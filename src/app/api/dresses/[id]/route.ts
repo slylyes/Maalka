@@ -4,10 +4,6 @@ import { badRequest, requireAuthenticatedUser, serverErrorFrom } from "@/lib/api
 
 type Params = { params: Promise<{ id: string }> };
 
-function normalizeDressPrice(price: number, discountAmount: number | null) {
-  return Math.max(Number(price) - Number(discountAmount ?? 0), 0);
-}
-
 export async function GET(_: Request, { params }: Params) {
   const { id } = await params;
   const { supabase, unauthorizedResponse } = await requireAuthenticatedUser();
@@ -15,19 +11,12 @@ export async function GET(_: Request, { params }: Params) {
 
   const { data, error } = await supabase
     .from("dresses")
-    .select("id, reference, name, category, price, discount_amount, size, status, notes, created_at, updated_at")
+    .select("id, reference, name, category, price, size, status, notes, created_at, updated_at")
     .eq("id", id)
     .single();
 
   if (error) return serverErrorFrom(error.message);
-  return NextResponse.json({
-    data: {
-      ...data,
-      price: normalizeDressPrice(Number(data.price), Number(data.discount_amount ?? 0)),
-      base_price: Number(data.price),
-      discount_amount: Number(data.discount_amount ?? 0),
-    },
-  });
+  return NextResponse.json({ data });
 }
 
 export async function PATCH(request: Request, { params }: Params) {
@@ -48,24 +37,8 @@ export async function PATCH(request: Request, { params }: Params) {
   if (typeof payload.notes === "string") updatePayload.notes = payload.notes;
   if (typeof payload.status === "string") updatePayload.status = payload.status;
   if (typeof payload.price === "number" && payload.price >= 0) updatePayload.price = payload.price;
-  if (typeof payload.discount_amount === "number" && payload.discount_amount >= 0) {
-    updatePayload.discount_amount = payload.discount_amount;
-  }
   if (typeof payload.size === "string") {
     updatePayload.size = payload.size.trim().length > 0 ? payload.size.trim() : null;
-  }
-
-  const nextPrice =
-    typeof updatePayload.price === "number" ? updatePayload.price : undefined;
-  const nextDiscountAmount =
-    typeof updatePayload.discount_amount === "number"
-      ? updatePayload.discount_amount
-      : typeof payload.discount_amount === "number"
-        ? payload.discount_amount
-        : undefined;
-
-  if (typeof nextPrice === "number" && typeof nextDiscountAmount === "number" && nextDiscountAmount > nextPrice) {
-    return badRequest("La remise ne peut pas dépasser le prix initial.");
   }
 
   if (Object.keys(updatePayload).length === 0) {
@@ -76,18 +49,11 @@ export async function PATCH(request: Request, { params }: Params) {
     .from("dresses")
     .update(updatePayload)
     .eq("id", id)
-    .select("id, reference, name, category, price, discount_amount, size, status, notes, created_at, updated_at")
+    .select("id, reference, name, category, price, size, status, notes, created_at, updated_at")
     .single();
 
   if (error) return serverErrorFrom(error.message);
-  return NextResponse.json({
-    data: {
-      ...data,
-      price: normalizeDressPrice(Number(data.price), Number(data.discount_amount ?? 0)),
-      base_price: Number(data.price),
-      discount_amount: Number(data.discount_amount ?? 0),
-    },
-  });
+  return NextResponse.json({ data });
 }
 
 export async function DELETE(_: Request, { params }: Params) {

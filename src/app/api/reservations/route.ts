@@ -105,7 +105,7 @@ export async function POST(request: Request) {
   const startDate = parseStartDate(payload.start_date);
   const { data: dressRows, error: dressError } = await supabase
     .from("dresses")
-    .select("id, price, discount_amount, reference, name")
+    .select("id, price, reference, name")
     .in("id", uniqueDressIds);
 
   if (dressError || !dressRows || dressRows.length === 0) {
@@ -119,6 +119,10 @@ export async function POST(request: Request) {
   const depositPaid =
     typeof payload.deposit_paid === "number" && payload.deposit_paid >= 0
       ? payload.deposit_paid
+      : 0;
+  const discountAmount =
+    typeof payload.discount_amount === "number" && payload.discount_amount >= 0
+      ? payload.discount_amount
       : 0;
   const cautionAmount =
     typeof payload.caution_amount === "number" && payload.caution_amount >= 0
@@ -139,13 +143,12 @@ export async function POST(request: Request) {
     return badRequest("Impossible de déterminer la première robe sélectionnée.");
   }
 
-  const totalPrice = orderedDressRows.reduce((sum, dress) => {
-    const discountedPrice = Math.max(
-      Number(dress.price) - Number(dress.discount_amount ?? 0),
-      0
-    );
-    return sum + discountedPrice;
-  }, 0);
+  const baseTotal = orderedDressRows.reduce((sum, dress) => sum + Number(dress.price ?? 0), 0);
+  const totalPrice = Math.max(baseTotal - discountAmount, 0);
+
+  if (discountAmount > baseTotal) {
+    return badRequest("La remise ne peut pas dépasser le prix total.");
+  }
 
   if (depositPaid > totalPrice) {
     return badRequest("L'acompte dépasse le prix total de la réservation.");
@@ -171,6 +174,7 @@ export async function POST(request: Request) {
       end_date: payload.end_date,
       status: "reserved",
       total_price: totalPrice,
+      discount_amount: discountAmount,
       deposit_paid: depositPaid,
       caution_amount: cautionAmount,
       caution_status: cautionStatus,
@@ -186,11 +190,35 @@ export async function POST(request: Request) {
 
   if (reservationError || !reservation) return serverErrorFrom(reservationError?.message ?? "Erreur serveur");
 
-  const dressItems = orderedDressRows.map((dress) => {
-    const discountedPrice = Math.max(
-      Number(dress.price) - Number(dress.discount_amount ?? 0),
-      0
-    );
+  const allocateDiscounts = (prices: number[], totalDiscount: number) => {
+    if (totalDiscount <= 0) return prices.map(() => 0);
+    const total = prices.reduce((sum, value) => sum + value, 0);
+    if (total <= 0) return prices.map(() => 0);
+
+    const allocations: number[] = [];
+    let allocatedSum = 0;
+
+    prices.forEach((price, index) => {
+      if (index === prices.length - 1) {
+        allocations.push(Math.max(totalDiscount - allocatedSum, 0));
+        return;
+      }
+      const raw = (price / total) * totalDiscount;
+      const rounded = Math.round(raw * 100) / 100;
+      allocations.push(rounded);
+      allocatedSum += rounded;
+    });
+
+    return allocations;
+  };
+
+  const basePrices = orderedDressRows.map((dress) => Number(dress.price ?? 0));
+  const allocatedDiscounts = allocateDiscounts(basePrices, discountAmount);
+
+  const dressItems = orderedDressRows.map((dress, index) => {
+    const basePrice = Number(dress.price ?? 0);
+    const allocatedDiscount = Math.min(allocatedDiscounts[index] ?? 0, basePrice);
+    const discountedPrice = Math.max(basePrice - allocatedDiscount, 0);
 
     return {
       reservation_id: reservation.id,
@@ -199,8 +227,8 @@ export async function POST(request: Request) {
       end_date: payload.end_date,
       status: reservation.status,
       price: discountedPrice,
-      base_price: Number(dress.price),
-      discount_amount: Number(dress.discount_amount ?? 0),
+      base_price: basePrice,
+      discount_amount: allocatedDiscount,
     };
   });
 

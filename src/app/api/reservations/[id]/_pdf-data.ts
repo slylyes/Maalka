@@ -7,7 +7,7 @@ export async function getReservationPdfData(id: string): Promise<ReservationPdfD
   const { data, error } = await supabase
     .from("reservations")
     .select(
-      "id, contract_number, start_date, end_date, status, total_price, deposit_paid, balance_due, caution_amount, caution_status, notes, reservation_dresses(price, base_price, discount_amount, dresses(reference,name)), clients(first_name,last_name,phone,email,address)"
+      "id, contract_number, start_date, end_date, status, total_price, discount_amount, deposit_paid, balance_due, caution_amount, caution_status, notes, reservation_dresses(price, base_price, discount_amount, dresses(reference,name)), clients(first_name,last_name,phone,email,address)"
     )
     .eq("id", id)
     .single();
@@ -33,12 +33,16 @@ export async function getReservationPdfData(id: string): Promise<ReservationPdfD
     };
   });
 
+  const baseTotal = dressItems.reduce((sum, item) => sum + item.basePrice, 0);
+
   return {
     contractNumber: data.contract_number,
     startDate: data.start_date,
     endDate: data.end_date,
     status: data.status,
     totalPrice: data.total_price,
+    baseTotal,
+    discountAmount: Number(data.discount_amount ?? 0),
     depositPaid: data.deposit_paid,
     balanceDue: data.balance_due,
     cautionAmount: data.caution_amount,
