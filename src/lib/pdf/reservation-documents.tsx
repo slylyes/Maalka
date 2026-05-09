@@ -339,18 +339,8 @@ function InvoiceDocument({ data, logoDataUrl }: { data: ReservationPdfData; logo
                   {item.name ? ` - ${item.name}` : ""}
                 </Text>
                 <View style={styles.row}>
-                  <Text>Prix initial</Text>
+                  <Text>Prix</Text>
                   <Money value={item.basePrice} />
-                </View>
-                {item.discountAmount > 0 ? (
-                  <View style={styles.row}>
-                    <Text>Remise</Text>
-                    <Money value={item.discountAmount} />
-                  </View>
-                ) : null}
-                <View style={styles.row}>
-                  <Text>Montant location</Text>
-                  <Money value={item.price} />
                 </View>
               </View>
             ))
