@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  BanknotesIcon,
   CalendarDaysIcon,
   HomeIcon,
   SparklesIcon,
@@ -14,6 +15,7 @@ const links = [
   { href: "/dashboard/dresses", label: "Robes", icon: SparklesIcon },
   { href: "/dashboard/clients", label: "Clients", icon: UserGroupIcon },
   { href: "/dashboard/reservations", label: "Réservations", icon: CalendarDaysIcon },
+  { href: "/dashboard/finances", label: "Finances", icon: BanknotesIcon },
 ];
 
 export function DashboardNavLinks() {
