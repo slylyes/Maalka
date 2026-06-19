@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useState, useMemo } from "react";
+import React, { useCallback, useState, useMemo, useRef, useEffect } from "react";
 
 function formatDateFr(value: string) {
   const [year, month, day] = value.split("-");
@@ -46,130 +46,155 @@ type ReservationsClientProps = {
   initialClients: ClientOption[];
 };
 
-// ── Searchable select for dresses ───────────────────────────────────────────
-function DressSearchSelect({
-  dresses,
+// ── Dropdown with search (closes on outside click) ───────────────────────────
+function SearchDropdown({
+  options,
   value,
   onChange,
-  placeholder = "Rechercher une robe…",
+  placeholder,
+  renderOption,
+  renderSelected,
+  required,
 }: {
-  dresses: DressOption[];
+  options: { id: string; label: string }[];
   value: string;
   onChange: (id: string) => void;
-  placeholder?: string;
+  placeholder: string;
+  renderOption?: (opt: { id: string; label: string }) => React.ReactNode;
+  renderSelected?: (opt: { id: string; label: string }) => React.ReactNode;
+  required?: boolean;
 }) {
+  const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
-    return dresses.filter(
-      (d) =>
-        d.reference.toLowerCase().includes(q) ||
-        (d.name ?? "").toLowerCase().includes(q)
-    );
-  }, [dresses, query]);
+    return options.filter((o) => o.label.toLowerCase().includes(q));
+  }, [options, query]);
+
+  const selected = options.find((o) => o.id === value);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setQuery("");
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  useEffect(() => {
+    if (open) {
+      setTimeout(() => searchRef.current?.focus(), 0);
+    }
+  }, [open]);
+
+  function select(id: string) {
+    onChange(id);
+    setOpen(false);
+    setQuery("");
+  }
 
   return (
-    <div className="space-y-1">
-      <input
-        type="text"
-        placeholder={placeholder}
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        className="premium-input w-full text-sm"
-      />
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="premium-input w-full"
-        size={Math.min(filtered.length + 1, 6)}
+    <div ref={containerRef} className="relative">
+      {/* Trigger button */}
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="premium-input w-full text-left flex items-center justify-between"
       >
-        <option value="">— Sélectionner —</option>
-        {filtered.map((dress) => (
-          <option key={dress.id} value={dress.id}>
-            {dress.reference}
-            {dress.name ? ` - ${dress.name}` : ""}
-          </option>
-        ))}
-      </select>
+        <span className={selected ? "text-[var(--foreground)]" : "text-[var(--muted)]"}>
+          {selected ? (renderSelected ? renderSelected(selected) : selected.label) : placeholder}
+        </span>
+        <span className="ml-2 text-[var(--muted)]">{open ? "▲" : "▼"}</span>
+      </button>
+
+      {/* Hidden native input for required validation */}
+      {required && (
+        <input
+          tabIndex={-1}
+          required
+          value={value}
+          onChange={() => {}}
+          className="absolute inset-0 opacity-0 pointer-events-none"
+          aria-hidden
+        />
+      )}
+
+      {/* Dropdown panel */}
+      {open && (
+        <div className="absolute z-30 mt-1 w-full rounded-xl border border-[var(--border-soft)] bg-white shadow-lg">
+          <div className="p-2 border-b border-[var(--border-soft)]">
+            <input
+              ref={searchRef}
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Rechercher…"
+              className="w-full rounded-lg border border-[var(--border-soft)] px-3 py-1.5 text-sm outline-none"
+            />
+          </div>
+          <ul className="max-h-48 overflow-y-auto py-1">
+            {filtered.length === 0 ? (
+              <li className="px-3 py-2 text-sm text-[var(--muted)]">Aucun résultat</li>
+            ) : (
+              filtered.map((opt) => (
+                <li key={opt.id}>
+                  <button
+                    type="button"
+                    onMouseDown={() => select(opt.id)}
+                    className={`w-full px-3 py-2 text-left text-sm hover:bg-[var(--surface-soft)] ${
+                      opt.id === value ? "font-medium text-[var(--foreground)]" : "text-[var(--muted)]"
+                    }`}
+                  >
+                    {renderOption ? renderOption(opt) : opt.label}
+                  </button>
+                </li>
+              ))
+            )}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
 
-// ── Searchable select for clients ────────────────────────────────────────────
-function ClientSearchSelect({
-  clients,
-  value,
-  onChange,
-}: {
-  clients: ClientOption[];
-  value: string;
-  onChange: (id: string) => void;
-}) {
-  const [query, setQuery] = useState("");
-  const sorted = useMemo(
-    () =>
-      [...clients].sort((a, b) =>
-        `${a.last_name} ${a.first_name}`.localeCompare(
-          `${b.last_name} ${b.first_name}`,
-          "fr"
-        )
-      ),
-    [clients]
-  );
-  const filtered = useMemo(() => {
-    const q = query.toLowerCase();
-    return sorted.filter(
-      (c) =>
-        c.first_name.toLowerCase().includes(q) ||
-        c.last_name.toLowerCase().includes(q) ||
-        c.phone.includes(q)
-    );
-  }, [sorted, query]);
-
-  return (
-    <div className="space-y-1">
-      <input
-        type="text"
-        placeholder="Rechercher un client…"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        className="premium-input w-full text-sm"
-      />
-      <select
-        required
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="premium-input w-full"
-        size={Math.min(filtered.length + 1, 6)}
-      >
-        <option value="">— Sélectionner —</option>
-        {filtered.map((client) => (
-          <option key={client.id} value={client.id}>
-            {client.last_name} {client.first_name} — {client.phone}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-}
-
-// ── Edit modal ───────────────────────────────────────────────────────────────
+// ── Edit modal ────────────────────────────────────────────────────────────────
 function EditReservationModal({
   reservation,
+  allDresses,
   clients,
   onClose,
   onSaved,
 }: {
   reservation: Reservation;
+  allDresses: DressOption[];
   clients: ClientOption[];
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const initialDressIds = useMemo(
+    () => (reservation.reservation_dresses ?? []).map((rd) => rd.dress_id),
+    [reservation]
+  );
+
   const [clientId, setClientId] = useState(reservation.client_id);
   const [startDate, setStartDate] = useState(reservation.start_date);
   const [endDate, setEndDate] = useState(reservation.end_date);
   const [status, setStatus] = useState(reservation.status);
-  const [totalPrice, setTotalPrice] = useState(String(reservation.total_price));
+  const [dressIds, setDressIds] = useState<string[]>(initialDressIds);
+  const [pickerDressId, setPickerDressId] = useState("");
+  const [discountAmount, setDiscountAmount] = useState(() => {
+    const total = (reservation.reservation_dresses ?? []).reduce(
+      (s, rd) => s + Number(rd.discount_amount ?? 0),
+      0
+    );
+    return total > 0 ? String(total) : "";
+  });
   const [depositPaid, setDepositPaid] = useState(String(reservation.deposit_paid));
   const [cautionAmount, setCautionAmount] = useState(String(reservation.caution_amount));
   const [cautionStatus, setCautionStatus] = useState(reservation.caution_status);
@@ -177,21 +202,56 @@ function EditReservationModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const selectedDresses = useMemo(
+    () => allDresses.filter((d) => dressIds.includes(d.id)),
+    [allDresses, dressIds]
+  );
+  const availableForPicker = useMemo(
+    () => allDresses.filter((d) => !dressIds.includes(d.id)),
+    [allDresses, dressIds]
+  );
+
+  const baseTotal = selectedDresses.reduce((s, d) => s + Number(d.price ?? 0), 0);
+  const parsedDiscount = discountAmount.trim().length > 0 ? Number(discountAmount) : 0;
+  const safeDiscount = Number.isFinite(parsedDiscount) ? Math.max(parsedDiscount, 0) : 0;
+  const computedTotal = Math.max(baseTotal - safeDiscount, 0);
+
+  const clientOptions = useMemo(
+    () =>
+      [...clients]
+        .sort((a, b) =>
+          `${a.last_name} ${a.first_name}`.localeCompare(`${b.last_name} ${b.first_name}`, "fr")
+        )
+        .map((c) => ({ id: c.id, label: `${c.last_name} ${c.first_name} — ${c.phone}` })),
+    [clients]
+  );
+
+  const dressOptions = useMemo(
+    () =>
+      availableForPicker.map((d) => ({
+        id: d.id,
+        label: `${d.reference}${d.name ? ` - ${d.name}` : ""}`,
+      })),
+    [availableForPicker]
+  );
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
 
-    const parsedTotal = Number(totalPrice);
-    const parsedDeposit = Number(depositPaid);
-    const parsedCaution = Number(cautionAmount);
-
-    if (!Number.isFinite(parsedTotal) || parsedTotal < 0) {
-      setError("Prix total invalide.");
+    if (dressIds.length === 0) {
+      setError("La réservation doit contenir au moins une robe.");
       setSubmitting(false);
       return;
     }
-    if (parsedDeposit > parsedTotal) {
+    if (safeDiscount > baseTotal) {
+      setError("La remise ne peut pas dépasser le prix total.");
+      setSubmitting(false);
+      return;
+    }
+    const parsedDeposit = Number(depositPaid);
+    if (parsedDeposit > computedTotal) {
       setError("L'acompte ne peut pas dépasser le prix total.");
       setSubmitting(false);
       return;
@@ -205,9 +265,11 @@ function EditReservationModal({
         start_date: startDate,
         end_date: endDate,
         status,
-        total_price: parsedTotal,
+        dress_ids: dressIds,
+        discount_amount: safeDiscount,
+        total_price: computedTotal,
         deposit_paid: parsedDeposit,
-        caution_amount: parsedCaution,
+        caution_amount: Number(cautionAmount) || 0,
         caution_status: cautionStatus,
         notes,
       }),
@@ -247,18 +309,65 @@ function EditReservationModal({
         </div>
 
         <form className="space-y-3" onSubmit={handleSubmit}>
+          {/* Robes */}
           <div>
-            <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">
-              Client
-            </label>
-            <ClientSearchSelect clients={clients} value={clientId} onChange={setClientId} />
+            <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">Robes</label>
+            <div className="space-y-2">
+              <SearchDropdown
+                options={dressOptions}
+                value={pickerDressId}
+                onChange={setPickerDressId}
+                placeholder="Ajouter une robe…"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (!pickerDressId) return;
+                  setDressIds((prev) => [...prev, pickerDressId]);
+                  setPickerDressId("");
+                }}
+                className="w-full rounded-xl border border-[var(--border-soft)] bg-white px-3 py-2 text-sm text-[var(--muted)]"
+              >
+                Ajouter la robe
+              </button>
+              {selectedDresses.length > 0 && (
+                <ul className="rounded-xl border border-[var(--border-soft)] bg-[var(--surface-soft)] p-3 space-y-2">
+                  {selectedDresses.map((dress) => (
+                    <li key={dress.id} className="flex items-center justify-between gap-2 text-sm">
+                      <span className="text-[var(--foreground)]">
+                        {dress.reference}{dress.name ? ` - ${dress.name}` : ""}{" "}
+                        <span className="text-[var(--muted)]">({dress.price} DA)</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setDressIds((prev) => prev.filter((id) => id !== dress.id))}
+                        className="rounded-lg border border-rose-200 bg-white px-2.5 py-1 text-xs text-rose-700"
+                      >
+                        Retirer
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
 
+          {/* Client */}
+          <div>
+            <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">Client</label>
+            <SearchDropdown
+              options={clientOptions}
+              value={clientId}
+              onChange={setClientId}
+              placeholder="Sélectionner un client…"
+              required
+            />
+          </div>
+
+          {/* Dates */}
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">
-                Début
-              </label>
+              <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">Début</label>
               <input
                 required
                 type="date"
@@ -268,9 +377,7 @@ function EditReservationModal({
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">
-                Fin
-              </label>
+              <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">Fin</label>
               <input
                 required
                 type="date"
@@ -281,10 +388,9 @@ function EditReservationModal({
             </div>
           </div>
 
+          {/* Statut */}
           <div>
-            <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">
-              Statut
-            </label>
+            <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">Statut</label>
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value)}
@@ -299,18 +405,31 @@ function EditReservationModal({
             </select>
           </div>
 
+          {/* Prix */}
+          <div>
+            <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">
+              Remise (DA)
+            </label>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              value={discountAmount}
+              onChange={(e) => setDiscountAmount(e.target.value)}
+              className="premium-input w-full"
+            />
+          </div>
+
           <div>
             <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">
               Prix total (DA)
             </label>
             <input
-              required
-              type="number"
-              min={0}
-              step="0.01"
-              value={totalPrice}
-              onChange={(e) => setTotalPrice(e.target.value)}
-              className="premium-input w-full"
+              readOnly
+              type="text"
+              value={selectedDresses.length ? computedTotal.toFixed(2) : ""}
+              placeholder="Prix total (auto)"
+              className="premium-input w-full bg-[var(--surface-soft)]"
             />
           </div>
 
@@ -328,6 +447,7 @@ function EditReservationModal({
             />
           </div>
 
+          {/* Caution */}
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">
@@ -360,10 +480,9 @@ function EditReservationModal({
             </div>
           </div>
 
+          {/* Notes */}
           <div>
-            <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">
-              Notes
-            </label>
+            <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">Notes</label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
@@ -421,10 +540,28 @@ export function ReservationsClient({
   const totalPriceValue = Math.max(baseTotalValue - safeDiscount, 0);
   const totalPrice = selectedDresses.length ? totalPriceValue.toFixed(2) : "";
 
-  // Available dresses for the picker (exclude already selected)
   const availableDressesForPicker = useMemo(
     () => dresses.filter((d) => !dressIds.includes(d.id)),
     [dresses, dressIds]
+  );
+
+  const clientOptions = useMemo(
+    () =>
+      [...clients]
+        .sort((a, b) =>
+          `${a.last_name} ${a.first_name}`.localeCompare(`${b.last_name} ${b.first_name}`, "fr")
+        )
+        .map((c) => ({ id: c.id, label: `${c.last_name} ${c.first_name} — ${c.phone}` })),
+    [clients]
+  );
+
+  const dressOptions = useMemo(
+    () =>
+      availableDressesForPicker.map((d) => ({
+        id: d.id,
+        label: `${d.reference}${d.name ? ` - ${d.name}` : ""}`,
+      })),
+    [availableDressesForPicker]
   );
 
   const formatReservationDresses = (reservation: Reservation) => {
@@ -548,6 +685,7 @@ export function ReservationsClient({
       {editingReservation ? (
         <EditReservationModal
           reservation={editingReservation}
+          allDresses={dresses}
           clients={clients}
           onClose={() => setEditingReservation(null)}
           onSaved={loadData}
@@ -560,10 +698,11 @@ export function ReservationsClient({
           <form className="mt-3 space-y-3" onSubmit={createReservation}>
             <div className="space-y-2">
               <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">Robe</p>
-              <DressSearchSelect
-                dresses={availableDressesForPicker}
+              <SearchDropdown
+                options={dressOptions}
                 value={dressId}
                 onChange={setDressId}
+                placeholder="Sélectionner une robe…"
               />
               <button
                 type="button"
@@ -615,7 +754,13 @@ export function ReservationsClient({
 
             <div>
               <p className="mb-1 text-xs font-medium uppercase tracking-wide text-[var(--muted)]">Client</p>
-              <ClientSearchSelect clients={clients} value={clientId} onChange={setClientId} />
+              <SearchDropdown
+                options={clientOptions}
+                value={clientId}
+                onChange={setClientId}
+                placeholder="Sélectionner un client…"
+                required
+              />
             </div>
 
             <div className="grid grid-cols-2 gap-2">
@@ -744,7 +889,7 @@ export function ReservationsClient({
                         <button
                           type="button"
                           onClick={() => setEditingReservation(reservation)}
-                          className="rounded-lg border border-amber-200 bg-white px-3 py-1.5 text-xs text-amber-700"
+                          className="rounded-lg border border-[var(--border-soft)] bg-white px-3 py-1.5 text-xs text-[var(--muted)]"
                         >
                           Modifier
                         </button>
