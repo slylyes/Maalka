@@ -1,6 +1,104 @@
 import Link from "next/link";
+import { CalendarDaysIcon } from "@heroicons/react/24/outline";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { formatAmount, formatDateFr } from "@/lib/format";
+
+type DressListItem = {
+  dresses?: { reference?: string; name?: string } | { reference?: string; name?: string }[] | null;
+};
+
+function firstRelation<T>(value: T[] | T | null | undefined): T | null {
+  if (!value) return null;
+  return Array.isArray(value) ? (value[0] ?? null) : value;
+}
+
+function dressReferences(items: DressListItem[] | null | undefined): string[] {
+  if (!items || items.length === 0) return [];
+  return items.map((item) => {
+    const dress = firstRelation(
+      item.dresses as { reference?: string; name?: string } | { reference?: string; name?: string }[] | null
+    );
+    return dress?.reference ?? "Robe";
+  });
+}
+
+const STATUS_META: Record<string, { label: string; className: string }> = {
+  reserved: { label: "Réservé", className: "border-amber-200 bg-amber-50 text-amber-700" },
+  preparing: { label: "En préparation", className: "border-sky-200 bg-sky-50 text-sky-700" },
+  rented: { label: "En location", className: "border-emerald-200 bg-emerald-50 text-emerald-700" },
+  completed: { label: "Terminé", className: "border-stone-200 bg-stone-100 text-stone-600" },
+  cancelled: { label: "Annulé", className: "border-rose-200 bg-rose-50 text-rose-700" },
+  draft: { label: "Brouillon", className: "border-stone-200 bg-stone-100 text-stone-600" },
+};
+
+function StatusBadge({ status }: { status: string }) {
+  const meta =
+    STATUS_META[status] ?? { label: status, className: "border-stone-200 bg-stone-100 text-stone-600" };
+  return (
+    <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium ${meta.className}`}>
+      {meta.label}
+    </span>
+  );
+}
+
+function DressChips({ items }: { items: DressListItem[] | null | undefined }) {
+  const refs = dressReferences(items);
+  if (refs.length === 0) return null;
+  return (
+    <div className="mt-2 flex flex-wrap gap-1.5">
+      {refs.map((ref, index) => (
+        <span
+          key={`${ref}-${index}`}
+          className="rounded-md bg-[var(--surface-soft)] px-2 py-0.5 text-xs font-medium text-[var(--foreground)]"
+        >
+          {ref}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function ReservationCard({
+  contractNumber,
+  clientName,
+  status,
+  items,
+  dateRange,
+}: {
+  contractNumber: string;
+  clientName: string;
+  status: string;
+  items: DressListItem[] | null | undefined;
+  dateRange?: { start: string; end: string };
+}) {
+  return (
+    <li className="rounded-xl border border-[var(--border-soft)] bg-white p-3.5 transition-colors hover:border-[var(--accent)]">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate font-medium text-[var(--foreground)]">{clientName || "Client inconnu"}</p>
+          <p className="mt-0.5 font-mono text-[11px] text-[var(--muted)]">{contractNumber}</p>
+        </div>
+        <StatusBadge status={status} />
+      </div>
+      {dateRange ? (
+        <p className="mt-2 flex items-center gap-1.5 text-xs text-[var(--muted)]">
+          <CalendarDaysIcon className="h-3.5 w-3.5 shrink-0" />
+          {formatDateFr(dateRange.start)} → {formatDateFr(dateRange.end)}
+        </p>
+      ) : null}
+      <DressChips items={items} />
+    </li>
+  );
+}
+
+function SectionCount({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <span className="rounded-full bg-[var(--surface-soft)] px-2.5 py-0.5 text-xs font-medium text-[var(--muted)]">
+      {count}
+    </span>
+  );
+}
 
 export default async function DashboardPage() {
   const supabase = await createSupabaseServerClient();
@@ -108,27 +206,8 @@ export default async function DashboardPage() {
       .lte("date", today),
   ]);
 
-  const firstRelation = <T,>(value: T[] | T | null | undefined): T | null => {
-    if (!value) return null;
-    if (Array.isArray(value)) return value[0] ?? null;
-    return value;
-  };
-
-  const formatDressList = (
-    items:
-      | Array<{ dresses?: { reference?: string; name?: string } | { reference?: string; name?: string }[] | null }>
-      | null
-      | undefined
-  ) => {
-    if (!items || items.length === 0) return "-";
-    const labels = items.map((item) => {
-      const dress = firstRelation(item.dresses as { reference?: string; name?: string } | { reference?: string; name?: string }[] | null);
-      if (!dress) return "Robe";
-      return dress.name ? `${dress.reference ?? "Robe"} - ${dress.name}` : (dress.reference ?? "Robe");
-    });
-    if (labels.length <= 2) return labels.join(", ");
-    return `${labels[0]}, ${labels[1]} +${labels.length - 2}`;
-  };
+  const clientName = (client: { first_name?: string; last_name?: string } | null) =>
+    `${client?.first_name ?? ""} ${client?.last_name ?? ""}`.trim();
 
   // Monthly finance summary (cash-based: acomptes à la réservation + soldes au 1er jour)
   const monthAcomptes = (monthDeposits ?? []).reduce((s, r) => s + Number(r.deposit_paid ?? 0), 0);
@@ -200,45 +279,49 @@ export default async function DashboardPage() {
       {/* Today operations */}
       <section className="grid gap-5 lg:grid-cols-2">
         <article className="premium-card p-6">
-          <h2 className="text-xl font-light tracking-wide text-[var(--foreground)]">
-            Sorties prévues aujourd&apos;hui
-          </h2>
-          <ul className="mt-4 space-y-3 text-sm text-[var(--muted)]">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-xl font-light tracking-wide text-[var(--foreground)]">
+              Sorties prévues aujourd&apos;hui
+            </h2>
+            <SectionCount count={pickups?.length ?? 0} />
+          </div>
+          <ul className="mt-4 space-y-3">
             {pickups?.length ? (
-              pickups.map((item) => {
-                const client = firstRelation(item.clients);
-                return (
-                  <li key={item.id} className="rounded-xl border border-[var(--border-soft)] bg-white p-3">
-                    <p className="font-medium text-[var(--foreground)]">{item.contract_number}</p>
-                    <p className="mt-1">Robes: {formatDressList(item.reservation_dresses)}</p>
-                    <p>Client: {client?.first_name} {client?.last_name}</p>
-                  </li>
-                );
-              })
+              pickups.map((item) => (
+                <ReservationCard
+                  key={item.id}
+                  contractNumber={item.contract_number}
+                  clientName={clientName(firstRelation(item.clients))}
+                  status={item.status}
+                  items={item.reservation_dresses as DressListItem[] | null}
+                />
+              ))
             ) : (
-              <li>Aucune sortie prévue aujourd&apos;hui.</li>
+              <li className="text-sm text-[var(--muted)]">Aucune sortie prévue aujourd&apos;hui.</li>
             )}
           </ul>
         </article>
 
         <article className="premium-card p-6">
-          <h2 className="text-xl font-light tracking-wide text-[var(--foreground)]">
-            Retours attendus aujourd&apos;hui
-          </h2>
-          <ul className="mt-4 space-y-3 text-sm text-[var(--muted)]">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-xl font-light tracking-wide text-[var(--foreground)]">
+              Retours attendus aujourd&apos;hui
+            </h2>
+            <SectionCount count={returns?.length ?? 0} />
+          </div>
+          <ul className="mt-4 space-y-3">
             {returns?.length ? (
-              returns.map((item) => {
-                const client = firstRelation(item.clients);
-                return (
-                  <li key={item.id} className="rounded-xl border border-[var(--border-soft)] bg-white p-3">
-                    <p className="font-medium text-[var(--foreground)]">{item.contract_number}</p>
-                    <p className="mt-1">Robes: {formatDressList(item.reservation_dresses)}</p>
-                    <p>Client: {client?.first_name} {client?.last_name}</p>
-                  </li>
-                );
-              })
+              returns.map((item) => (
+                <ReservationCard
+                  key={item.id}
+                  contractNumber={item.contract_number}
+                  clientName={clientName(firstRelation(item.clients))}
+                  status={item.status}
+                  items={item.reservation_dresses as DressListItem[] | null}
+                />
+              ))
             ) : (
-              <li>Aucun retour attendu aujourd&apos;hui.</li>
+              <li className="text-sm text-[var(--muted)]">Aucun retour attendu aujourd&apos;hui.</li>
             )}
           </ul>
         </article>
@@ -246,24 +329,24 @@ export default async function DashboardPage() {
 
       {/* Upcoming reservations */}
       <article className="premium-card p-6">
-        <h2 className="text-xl font-light tracking-wide text-[var(--foreground)]">Prochaines réservations</h2>
-        <ul className="mt-4 space-y-3 text-sm text-[var(--muted)]">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-xl font-light tracking-wide text-[var(--foreground)]">Prochaines réservations</h2>
+          <SectionCount count={upcomingReservations?.length ?? 0} />
+        </div>
+        <ul className="mt-4 grid gap-3 sm:grid-cols-2">
           {upcomingReservations?.length ? (
-            upcomingReservations.map((item) => {
-              const client = firstRelation(item.clients);
-              return (
-                <li key={item.id} className="rounded-xl border border-[var(--border-soft)] bg-white p-3">
-                  <p className="font-medium text-[var(--foreground)]">{item.contract_number}</p>
-                  <p className="mt-1">
-                    {formatDateFr(item.start_date)} → {formatDateFr(item.end_date)} ({item.status})
-                  </p>
-                  <p>Robes: {formatDressList(item.reservation_dresses)}</p>
-                  <p>Client: {client?.first_name} {client?.last_name}</p>
-                </li>
-              );
-            })
+            upcomingReservations.map((item) => (
+              <ReservationCard
+                key={item.id}
+                contractNumber={item.contract_number}
+                clientName={clientName(firstRelation(item.clients))}
+                status={item.status}
+                items={item.reservation_dresses as DressListItem[] | null}
+                dateRange={{ start: item.start_date, end: item.end_date }}
+              />
+            ))
           ) : (
-            <li>Aucune réservation à venir.</li>
+            <li className="text-sm text-[var(--muted)]">Aucune réservation à venir.</li>
           )}
         </ul>
       </article>
