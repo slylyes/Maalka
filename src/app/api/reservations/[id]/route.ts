@@ -26,7 +26,8 @@ async function syncDressAvailability(supabase: Awaited<ReturnType<typeof require
   const { error: updateError } = await supabase
     .from("dresses")
     .update({ status: nextStatus })
-    .eq("id", dressId);
+    .eq("id", dressId)
+    .in("status", ["available", "reserved"]);
 
   if (updateError) {
     return { error: updateError.message };
@@ -96,6 +97,14 @@ export async function PATCH(request: Request, { params }: Params) {
     return badRequest("Aucun champ valide à mettre à jour.");
   }
 
+  if (
+    typeof updatePayload.start_date === "string" &&
+    typeof updatePayload.end_date === "string" &&
+    updatePayload.start_date > updatePayload.end_date
+  ) {
+    return badRequest("La date de fin doit être supérieure ou égale à la date de début.");
+  }
+
   // Handle dress list update if dress_ids provided
   const newDressIds: string[] | null = Array.isArray(payload.dress_ids)
     ? payload.dress_ids.filter((v: unknown) => typeof v === "string")
@@ -127,6 +136,8 @@ export async function PATCH(request: Request, { params }: Params) {
     }
 
     updatePayload.total_price = totalPrice;
+    // Keep the legacy reservations.dress_id column consistent with the first dress
+    updatePayload.dress_id = newDressIds[0];
 
     // Allocate discount proportionally across dresses
     const basePrices = newDressIds.map((did) => {

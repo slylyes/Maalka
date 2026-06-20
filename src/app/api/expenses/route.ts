@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { badRequest, requireAuthenticatedUser, serverErrorFrom } from "@/lib/api/auth";
+import { isValidDate } from "@/lib/format";
 
 const VALID_CATEGORIES = new Set(["salaires", "achat_robes", "charges", "autre"]);
 
@@ -35,6 +36,7 @@ export async function POST(request: Request) {
   const { date, amount, category, dress_category, description } = payload;
 
   if (!date || typeof date !== "string") return badRequest("La date est obligatoire.");
+  if (!isValidDate(date)) return badRequest("La date doit être au format AAAA-MM-JJ.");
   if (typeof amount !== "number" || amount <= 0) return badRequest("Le montant doit être un nombre positif.");
   if (!category || !VALID_CATEGORIES.has(category)) return badRequest("Catégorie invalide.");
 

@@ -2,11 +2,7 @@
 
 import React, { useCallback, useState, useMemo, useRef, useEffect } from "react";
 
-function formatDateFr(value: string) {
-  const [year, month, day] = value.split("-");
-  if (!year || !month || !day) return value;
-  return `${day}-${month}-${year}`;
-}
+import { formatAmount, formatDateFr } from "@/lib/format";
 
 type DressOption = {
   id: string;
@@ -245,6 +241,11 @@ function EditReservationModal({
       setSubmitting(false);
       return;
     }
+    if (startDate > endDate) {
+      setError("La date de fin doit être supérieure ou égale à la date de début.");
+      setSubmitting(false);
+      return;
+    }
     if (safeDiscount > baseTotal) {
       setError("La remise ne peut pas dépasser le prix total.");
       setSubmitting(false);
@@ -336,7 +337,7 @@ function EditReservationModal({
                     <li key={dress.id} className="flex items-center justify-between gap-2 text-sm">
                       <span className="text-[var(--foreground)]">
                         {dress.reference}{dress.name ? ` - ${dress.name}` : ""}{" "}
-                        <span className="text-[var(--muted)]">({dress.price} DA)</span>
+                        <span className="text-[var(--muted)]">({formatAmount(dress.price)})</span>
                       </span>
                       <button
                         type="button"
@@ -623,8 +624,21 @@ export function ReservationsClient({
       return;
     }
 
+    if (startDate > endDate) {
+      setError("La date de fin doit être supérieure ou égale à la date de début.");
+      setSubmitting(false);
+      return;
+    }
+
     if (safeDiscount > baseTotalValue) {
       setError("La remise ne peut pas dépasser le prix total.");
+      setSubmitting(false);
+      return;
+    }
+
+    const parsedDeposit = depositPaid.trim().length > 0 ? Number(depositPaid) : 0;
+    if (parsedDeposit > totalPriceValue) {
+      setError("L'acompte ne peut pas dépasser le prix total.");
       setSubmitting(false);
       return;
     }
@@ -638,7 +652,7 @@ export function ReservationsClient({
         start_date: startDate,
         end_date: endDate,
         discount_amount: safeDiscount,
-        deposit_paid: depositPaid.trim().length > 0 ? Number(depositPaid) : 0,
+        deposit_paid: parsedDeposit,
         caution_amount: cautionAmount.trim().length > 0 ? Number(cautionAmount) : 0,
         caution_status: cautionStatus,
         notes,
@@ -868,9 +882,9 @@ export function ReservationsClient({
                     </td>
                     <td className="py-4 pr-4">{formatReservationDresses(reservation)}</td>
                     <td className="py-4 pr-4">
-                      <div>Total: {reservation.total_price} DA</div>
-                      <div>Acompte: {reservation.deposit_paid} DA</div>
-                      <div>Reste: {reservation.balance_due} DA</div>
+                      <div>Total: {formatAmount(reservation.total_price)}</div>
+                      <div>Acompte: {formatAmount(reservation.deposit_paid)}</div>
+                      <div>Reste: {formatAmount(reservation.balance_due)}</div>
                     </td>
                     <td className="py-4">
                       <div className="flex flex-wrap gap-2">

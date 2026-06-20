@@ -1,9 +1,6 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { FinancesClient } from "@/app/dashboard/finances/ui";
-
-function isValidDate(value: string | undefined): value is string {
-  return !!value && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value));
-}
+import { isValidDate } from "@/lib/format";
 
 function addDaysStr(dateStr: string, days: number) {
   const d = new Date(dateStr + "T00:00:00Z");

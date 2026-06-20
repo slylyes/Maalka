@@ -95,6 +95,10 @@ export async function POST(request: Request) {
     return badRequest("La date de fin est obligatoire.");
   }
 
+  if (payload.start_date > payload.end_date) {
+    return badRequest("La date de fin doit être supérieure ou égale à la date de début.");
+  }
+
   if (
     payload.caution_status &&
     (typeof payload.caution_status !== "string" || !allowedCautionStatuses.has(payload.caution_status))

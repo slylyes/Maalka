@@ -4,6 +4,8 @@
 
 import { FormEvent, useCallback, useMemo, useState } from "react";
 
+import { formatAmount, formatDateFr } from "@/lib/format";
+
 type Dress = {
   id: string;
   reference: string;
@@ -44,12 +46,6 @@ function formatMonthKey(date: Date) {
 
 function dateKey(date: Date) {
   return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
-}
-
-function formatDateFr(value: string) {
-  const [year, month, day] = value.split("-");
-  if (!year || !month || !day) return value;
-  return `${day}-${month}-${year}`;
 }
 
 function addDays(value: Date, amount: number) {
@@ -449,7 +445,7 @@ export function DressesClient({ initialDresses }: DressesClientProps) {
                       </p>
                       <p className="mt-1 text-sm text-[var(--muted)]">{dress.name || "Sans nom"}</p>
                       <div className="mt-3 space-y-1 text-sm text-[var(--muted)]">
-                        <p>Prix: {dress.price} DA</p>
+                        <p>Prix: {formatAmount(dress.price)}</p>
                         <p>Taille: {dress.size || "-"}</p>
                       </div>
                       <div className="mt-4 flex flex-wrap gap-2">

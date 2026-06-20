@@ -1,15 +1,6 @@
 import Link from "next/link";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-
-function formatDateFr(value: string) {
-  const [year, month, day] = value.split("-");
-  if (!year || !month || !day) return value;
-  return `${day}-${month}-${year}`;
-}
-
-function formatAmount(value: number) {
-  return `${value.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} DA`;
-}
+import { formatAmount, formatDateFr } from "@/lib/format";
 
 export default async function DashboardPage() {
   const supabase = await createSupabaseServerClient();
@@ -170,8 +161,8 @@ export default async function DashboardPage() {
         </div>
         <div className="premium-card p-5">
           <p className="text-xs uppercase tracking-wide text-[var(--muted)]">CA prévu aujourd&apos;hui</p>
-          <p className="mt-2 text-3xl font-light text-[var(--foreground)]">{expectedTurnoverToday.toFixed(2)} DA</p>
-          <p className="mt-1 text-xs text-[var(--muted)]">Reste attendu: {expectedOutstandingToday.toFixed(2)} DA</p>
+          <p className="mt-2 text-3xl font-light text-[var(--foreground)]">{formatAmount(expectedTurnoverToday)}</p>
+          <p className="mt-1 text-xs text-[var(--muted)]">Reste attendu: {formatAmount(expectedOutstandingToday)}</p>
         </div>
       </article>
 

@@ -3,16 +3,7 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { FinancesPageData, Expense } from "@/app/dashboard/finances/page";
-
-function formatAmount(v: number) {
-  return `${v.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} DA`;
-}
-
-function formatDateFr(value: string) {
-  const [y, m, d] = value.split("-");
-  if (!y || !m || !d) return value;
-  return `${d}-${m}-${y}`;
-}
+import { formatAmount, formatDateFr } from "@/lib/format";
 
 const CATEGORY_LABELS: Record<string, string> = {
   salaires: "Salaires",
