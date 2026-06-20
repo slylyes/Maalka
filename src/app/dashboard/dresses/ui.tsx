@@ -59,11 +59,164 @@ type DressesClientProps = {
   initialDresses: Dress[];
 };
 
+function EditDressModal({
+  dress,
+  onClose,
+  onSaved,
+}: {
+  dress: Dress;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [reference, setReference] = useState(dress.reference);
+  const [name, setName] = useState(dress.name ?? "");
+  const [category, setCategory] = useState(dress.category || "");
+  const [price, setPrice] = useState(String(dress.price));
+  const [size, setSize] = useState(dress.size ?? "");
+  const [notes, setNotes] = useState(dress.notes ?? "");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSubmitting(true);
+    setError(null);
+
+    const parsedPrice = Number(price);
+    if (Number.isNaN(parsedPrice) || parsedPrice < 0) {
+      setError("Le prix doit être un nombre positif.");
+      setSubmitting(false);
+      return;
+    }
+
+    const response = await fetch(`/api/dresses/${dress.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reference, name, category, price: parsedPrice, size, notes }),
+    });
+
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setError(json.error || "Erreur lors de la modification.");
+      setSubmitting(false);
+      return;
+    }
+
+    setSubmitting(false);
+    onSaved();
+    onClose();
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div className="premium-card w-full max-w-lg overflow-y-auto max-h-[90vh] p-6">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-light tracking-wide text-[var(--foreground)]">
+            Modifier — {dress.reference}
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="btn-secondary rounded-lg border border-[var(--border-soft)] px-3 py-1 text-sm text-[var(--muted)]"
+          >
+            Fermer
+          </button>
+        </div>
+
+        <form className="space-y-3" onSubmit={handleSubmit}>
+          <div>
+            <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">Référence</label>
+            <input
+              required
+              value={reference}
+              onChange={(event) => setReference(event.target.value)}
+              className="premium-input w-full"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">Nom</label>
+            <input
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Optionnel"
+              className="premium-input w-full"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">Catégorie</label>
+              <select
+                required
+                value={category}
+                onChange={(event) => setCategory(event.target.value)}
+                className="premium-input w-full"
+              >
+                <option value="" disabled>
+                  Catégorie
+                </option>
+                {categoryOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">Prix (DA)</label>
+              <input
+                required
+                min={0}
+                type="number"
+                step="0.01"
+                value={price}
+                onChange={(event) => setPrice(event.target.value)}
+                className="premium-input w-full"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">Taille</label>
+            <input
+              value={size}
+              onChange={(event) => setSize(event.target.value)}
+              placeholder="Optionnel"
+              className="premium-input w-full"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">Notes</label>
+            <textarea
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+              className="premium-input min-h-24 w-full"
+            />
+          </div>
+
+          {error ? <p className="text-sm text-red-600">{error}</p> : null}
+
+          <button
+            type="submit"
+            disabled={submitting}
+            className="premium-btn w-full px-3 py-2.5 text-sm disabled:opacity-60"
+          >
+            {submitting ? "Enregistrement…" : "Enregistrer les modifications"}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export function DressesClient({ initialDresses }: DressesClientProps) {
   const [dresses, setDresses] = useState<Dress[]>(initialDresses);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [editingDressId, setEditingDressId] = useState<string | null>(null);
+  const [editingDress, setEditingDress] = useState<Dress | null>(null);
   const [search, setSearch] = useState("");
 
   const [reference, setReference] = useState("");
@@ -235,11 +388,8 @@ export function DressesClient({ initialDresses }: DressesClientProps) {
       return;
     }
 
-    const endpoint = editingDressId ? `/api/dresses/${editingDressId}` : "/api/dresses";
-    const method = editingDressId ? "PATCH" : "POST";
-
-    const response = await fetch(endpoint, {
-      method,
+    const response = await fetch("/api/dresses", {
+      method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         reference,
@@ -265,31 +415,8 @@ export function DressesClient({ initialDresses }: DressesClientProps) {
     setPrice("");
     setSize("");
     setNotes("");
-    setEditingDressId(null);
     setSubmitting(false);
     await loadDresses();
-  }
-
-  function startEditDress(dress: Dress) {
-    setEditingDressId(dress.id);
-    setReference(dress.reference);
-    setName(dress.name ?? "");
-    setCategory(dress.category || "");
-    setPrice(String(dress.price));
-    setSize(dress.size ?? "");
-    setNotes(dress.notes ?? "");
-    setError(null);
-  }
-
-  function resetDressForm() {
-    setEditingDressId(null);
-    setReference("");
-    setName("");
-    setCategory("");
-    setPrice("");
-    setSize("");
-    setNotes("");
-    setError(null);
   }
 
   async function deleteDress(id: string) {
@@ -358,9 +485,7 @@ export function DressesClient({ initialDresses }: DressesClientProps) {
     <>
     <section className="grid gap-5 xl:grid-cols-12">
       <article className="premium-card p-6 xl:col-span-4">
-        <h2 className="text-xl font-light tracking-wide text-[var(--foreground)]">
-          {editingDressId ? "Modifier la robe" : "Nouvelle robe"}
-        </h2>
+        <h2 className="text-xl font-light tracking-wide text-[var(--foreground)]">Nouvelle robe</h2>
         <form className="mt-3 space-y-3" onSubmit={saveDress}>
           <input
             required
@@ -417,23 +542,8 @@ export function DressesClient({ initialDresses }: DressesClientProps) {
             type="submit"
             className="premium-btn w-full px-3 py-2.5 text-sm disabled:opacity-60"
           >
-            {submitting
-              ? editingDressId
-                ? "Mise à jour..."
-                : "Création..."
-              : editingDressId
-                ? "Enregistrer les modifications"
-                : "Créer la robe"}
+            {submitting ? "Création..." : "Créer la robe"}
           </button>
-          {editingDressId ? (
-            <button
-              type="button"
-              onClick={resetDressForm}
-              className="btn-secondary w-full rounded-xl border border-[var(--border-soft)] bg-white px-3 py-2.5 text-sm text-[var(--muted)]"
-            >
-              Annuler la modification
-            </button>
-          ) : null}
         </form>
         {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
       </article>
@@ -497,7 +607,7 @@ export function DressesClient({ initialDresses }: DressesClientProps) {
                         </button>
                         <button
                           type="button"
-                          onClick={() => startEditDress(dress)}
+                          onClick={() => setEditingDress(dress)}
                           className="btn-secondary rounded-lg border border-[var(--border-soft)] bg-white px-3 py-1.5 text-xs text-[var(--muted)]"
                         >
                           Modifier
@@ -523,6 +633,14 @@ export function DressesClient({ initialDresses }: DressesClientProps) {
       </article>
 
     </section>
+
+      {editingDress ? (
+        <EditDressModal
+          dress={editingDress}
+          onClose={() => setEditingDress(null)}
+          onSaved={loadDresses}
+        />
+      ) : null}
 
       {selectedDress ? (
         <div
