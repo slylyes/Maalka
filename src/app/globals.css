@@ -77,3 +77,29 @@ textarea {
 .premium-btn:hover {
   background: var(--accent-deep);
 }
+
+/* Secondary / soft / danger buttons: consistent hover feedback */
+.btn-secondary {
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.btn-secondary:hover {
+  background-color: var(--surface-soft);
+  border-color: var(--accent);
+  color: var(--accent-deep);
+}
+
+.btn-soft {
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.btn-soft:hover {
+  background-color: var(--border-soft);
+  border-color: var(--accent);
+}
+
+.btn-danger {
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.btn-danger:hover {
+  background-color: #fff1f2;
+  border-color: #fda4af;
+}

@@ -303,7 +303,7 @@ function EditReservationModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-[var(--border-soft)] px-3 py-1 text-sm text-[var(--muted)]"
+            className="btn-secondary rounded-lg border border-[var(--border-soft)] px-3 py-1 text-sm text-[var(--muted)]"
           >
             Fermer
           </button>
@@ -327,7 +327,7 @@ function EditReservationModal({
                   setDressIds((prev) => [...prev, pickerDressId]);
                   setPickerDressId("");
                 }}
-                className="w-full rounded-xl border border-[var(--border-soft)] bg-white px-3 py-2 text-sm text-[var(--muted)]"
+                className="btn-secondary w-full rounded-xl border border-[var(--border-soft)] bg-white px-3 py-2 text-sm text-[var(--muted)]"
               >
                 Ajouter la robe
               </button>
@@ -342,7 +342,7 @@ function EditReservationModal({
                       <button
                         type="button"
                         onClick={() => setDressIds((prev) => prev.filter((id) => id !== dress.id))}
-                        className="rounded-lg border border-rose-200 bg-white px-2.5 py-1 text-xs text-rose-700"
+                        className="btn-danger rounded-lg border border-rose-200 bg-white px-2.5 py-1 text-xs text-rose-700"
                       >
                         Retirer
                       </button>
@@ -733,7 +733,7 @@ export function ReservationsClient({
                   setDressIds((previous) => [...previous, dressId]);
                   setDressId("");
                 }}
-                className="w-full rounded-xl border border-[var(--border-soft)] bg-white px-3 py-2 text-sm text-[var(--muted)]"
+                className="btn-secondary w-full rounded-xl border border-[var(--border-soft)] bg-white px-3 py-2 text-sm text-[var(--muted)]"
               >
                 Ajouter la robe
               </button>
@@ -756,7 +756,7 @@ export function ReservationsClient({
                           setError(null);
                           setDressIds((previous) => previous.filter((id) => id !== dress.id));
                         }}
-                        className="rounded-lg border border-rose-200 bg-white px-2.5 py-1 text-xs text-rose-700"
+                        className="btn-danger rounded-lg border border-rose-200 bg-white px-2.5 py-1 text-xs text-rose-700"
                       >
                         Retirer
                       </button>
@@ -890,27 +890,27 @@ export function ReservationsClient({
                       <div className="flex flex-wrap gap-2">
                         <a
                           href={`/api/reservations/${reservation.id}/contract-pdf`}
-                          className="rounded-lg border border-[var(--border-soft)] bg-white px-3 py-1.5 text-xs text-[var(--muted)]"
+                          className="btn-secondary rounded-lg border border-[var(--border-soft)] bg-white px-3 py-1.5 text-xs text-[var(--muted)]"
                         >
                           Contrat
                         </a>
                         <a
                           href={`/api/reservations/${reservation.id}/invoice-pdf`}
-                          className="rounded-lg border border-[var(--border-soft)] bg-white px-3 py-1.5 text-xs text-[var(--muted)]"
+                          className="btn-secondary rounded-lg border border-[var(--border-soft)] bg-white px-3 py-1.5 text-xs text-[var(--muted)]"
                         >
                           Facture
                         </a>
                         <button
                           type="button"
                           onClick={() => setEditingReservation(reservation)}
-                          className="rounded-lg border border-[var(--border-soft)] bg-white px-3 py-1.5 text-xs text-[var(--muted)]"
+                          className="btn-secondary rounded-lg border border-[var(--border-soft)] bg-white px-3 py-1.5 text-xs text-[var(--muted)]"
                         >
                           Modifier
                         </button>
                         <button
                           type="button"
                           onClick={() => void deleteReservation(reservation.id)}
-                          className="rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs text-rose-700"
+                          className="btn-danger rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs text-rose-700"
                         >
                           Supprimer
                         </button>

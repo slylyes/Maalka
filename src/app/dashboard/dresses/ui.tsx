@@ -429,7 +429,7 @@ export function DressesClient({ initialDresses }: DressesClientProps) {
             <button
               type="button"
               onClick={resetDressForm}
-              className="w-full rounded-xl border border-[var(--border-soft)] bg-white px-3 py-2.5 text-sm text-[var(--muted)]"
+              className="btn-secondary w-full rounded-xl border border-[var(--border-soft)] bg-white px-3 py-2.5 text-sm text-[var(--muted)]"
             >
               Annuler la modification
             </button>
@@ -491,21 +491,21 @@ export function DressesClient({ initialDresses }: DressesClientProps) {
                         <button
                           type="button"
                           onClick={() => openManage(dress)}
-                          className="rounded-lg border border-[var(--border-soft)] bg-[var(--surface-soft)] px-3 py-1.5 text-xs text-[var(--muted)]"
+                          className="btn-soft rounded-lg border border-[var(--border-soft)] bg-[var(--surface-soft)] px-3 py-1.5 text-xs text-[var(--muted)]"
                         >
                           Gérer
                         </button>
                         <button
                           type="button"
                           onClick={() => startEditDress(dress)}
-                          className="rounded-lg border border-[var(--border-soft)] bg-white px-3 py-1.5 text-xs text-[var(--muted)]"
+                          className="btn-secondary rounded-lg border border-[var(--border-soft)] bg-white px-3 py-1.5 text-xs text-[var(--muted)]"
                         >
                           Modifier
                         </button>
                         <button
                           type="button"
                           onClick={() => void deleteDress(dress.id)}
-                          className="rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs text-rose-700"
+                          className="btn-danger rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs text-rose-700"
                         >
                           Supprimer
                         </button>
@@ -546,7 +546,7 @@ export function DressesClient({ initialDresses }: DressesClientProps) {
               <button
                 type="button"
                 onClick={closeManage}
-                className="shrink-0 rounded-lg border border-[var(--border-soft)] px-3 py-1 text-sm text-[var(--muted)]"
+                className="btn-secondary shrink-0 rounded-lg border border-[var(--border-soft)] px-3 py-1 text-sm text-[var(--muted)]"
               >
                 Fermer
               </button>
@@ -625,7 +625,7 @@ export function DressesClient({ initialDresses }: DressesClientProps) {
                   <button
                     type="button"
                     onClick={() => goToMonth(-1)}
-                    className="rounded-lg border border-[var(--border-soft)] bg-white px-2.5 py-1 text-xs text-[var(--muted)]"
+                    className="btn-secondary rounded-lg border border-[var(--border-soft)] bg-white px-2.5 py-1 text-xs text-[var(--muted)]"
                   >
                     Précédent
                   </button>
@@ -638,7 +638,7 @@ export function DressesClient({ initialDresses }: DressesClientProps) {
                   <button
                     type="button"
                     onClick={() => goToMonth(1)}
-                    className="rounded-lg border border-[var(--border-soft)] bg-white px-2.5 py-1 text-xs text-[var(--muted)]"
+                    className="btn-secondary rounded-lg border border-[var(--border-soft)] bg-white px-2.5 py-1 text-xs text-[var(--muted)]"
                   >
                     Suivant
                   </button>

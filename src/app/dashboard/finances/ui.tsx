@@ -330,7 +330,7 @@ function ExpensesList({
             type="button"
             disabled={deleting === e.id}
             onClick={() => void handleDelete(e.id)}
-            className="shrink-0 rounded-lg border border-rose-200 bg-white px-2.5 py-1 text-xs text-rose-700 disabled:opacity-50"
+            className="btn-danger shrink-0 rounded-lg border border-rose-200 bg-white px-2.5 py-1 text-xs text-rose-700 disabled:opacity-50"
           >
             {deleting === e.id ? "…" : "Supprimer"}
           </button>
