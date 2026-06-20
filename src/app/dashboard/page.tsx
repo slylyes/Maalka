@@ -16,6 +16,12 @@ export default async function DashboardPage() {
 
   const today = new Date().toISOString().slice(0, 10);
   const monthStart = today.slice(0, 7) + "-01";
+  // Exclusive upper bound (next day) for created_at timestamptz filtering
+  const tomorrow = (() => {
+    const d = new Date(today + "T00:00:00Z");
+    d.setUTCDate(d.getUTCDate() + 1);
+    return d.toISOString().slice(0, 10);
+  })();
 
   // Sync dress availability
   const { data: activeDressRows } = await supabase
@@ -44,7 +50,8 @@ export default async function DashboardPage() {
     { count: availableDresses },
     { count: activeReservations },
     { data: upcomingReservations },
-    { data: monthReservations },
+    { data: monthDeposits },
+    { data: monthBalances },
     { data: monthExpenses },
   ] = await Promise.all([
     supabase
@@ -86,10 +93,18 @@ export default async function DashboardPage() {
       .order("start_date", { ascending: true })
       .limit(5),
 
-    // Current month reservations for the finance summary card
+    // Acomptes encaissés ce mois (à la date de réservation)
     supabase
       .from("reservations")
-      .select("id, start_date, status, total_price, deposit_paid, balance_due")
+      .select("deposit_paid, created_at, status")
+      .gte("created_at", monthStart)
+      .lt("created_at", tomorrow)
+      .not("status", "in", '("cancelled","draft")'),
+
+    // Soldes encaissés ce mois (au 1er jour de location atteint)
+    supabase
+      .from("reservations")
+      .select("balance_due, start_date, status")
       .gte("start_date", monthStart)
       .lte("start_date", today)
       .not("status", "in", '("cancelled","draft")'),
@@ -124,8 +139,10 @@ export default async function DashboardPage() {
     return `${labels[0]}, ${labels[1]} +${labels.length - 2}`;
   };
 
-  // Monthly finance summary
-  const monthCA = (monthReservations ?? []).reduce((s, r) => s + Number(r.total_price ?? 0), 0);
+  // Monthly finance summary (cash-based: acomptes à la réservation + soldes au 1er jour)
+  const monthAcomptes = (monthDeposits ?? []).reduce((s, r) => s + Number(r.deposit_paid ?? 0), 0);
+  const monthSoldes = (monthBalances ?? []).reduce((s, r) => s + Number(r.balance_due ?? 0), 0);
+  const monthCA = monthAcomptes + monthSoldes;
   const monthExpensesTotal = (monthExpenses ?? []).reduce((s, e) => s + Number(e.amount ?? 0), 0);
   const monthProfit = monthCA - monthExpensesTotal;
 

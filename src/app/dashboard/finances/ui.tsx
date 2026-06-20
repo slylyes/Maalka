@@ -21,6 +21,99 @@ const CATEGORY_LABELS: Record<string, string> = {
   autre: "Autre",
 };
 
+// ── Date range picker ──────────────────────────────────────────────────────
+function DateRangePicker({ from, to }: { from: string; to: string }) {
+  const router = useRouter();
+  const [f, setF] = useState(from);
+  const [t, setT] = useState(to);
+
+  function go(nf: string, nt: string) {
+    router.push(`/dashboard/finances?from=${nf}&to=${nt}`);
+  }
+
+  function applyPreset(days: number) {
+    const today = new Date().toISOString().slice(0, 10);
+    const d = new Date(today + "T00:00:00Z");
+    d.setUTCDate(d.getUTCDate() - (days - 1));
+    const nf = d.toISOString().slice(0, 10);
+    setF(nf);
+    setT(today);
+    go(nf, today);
+  }
+
+  function applyThisMonth() {
+    const today = new Date().toISOString().slice(0, 10);
+    const nf = today.slice(0, 7) + "-01";
+    setF(nf);
+    setT(today);
+    go(nf, today);
+  }
+
+  return (
+    <div className="flex flex-col gap-2 sm:items-end">
+      <div className="flex flex-wrap items-end gap-2">
+        <div>
+          <label className="mb-1 block text-[10px] uppercase tracking-wide text-[var(--muted)]">Du</label>
+          <input
+            type="date"
+            value={f}
+            max={t}
+            onChange={(e) => setF(e.target.value)}
+            className="premium-input"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-[10px] uppercase tracking-wide text-[var(--muted)]">Au</label>
+          <input
+            type="date"
+            value={t}
+            min={f}
+            onChange={(e) => setT(e.target.value)}
+            className="premium-input"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => go(f, t)}
+          className="premium-btn px-4 py-2 text-xs"
+        >
+          Appliquer
+        </button>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => applyPreset(30)}
+          className="rounded-lg border border-[var(--border-soft)] bg-white px-2.5 py-1 text-xs text-[var(--muted)] hover:bg-[var(--surface-soft)]"
+        >
+          30 j
+        </button>
+        <button
+          type="button"
+          onClick={() => applyPreset(90)}
+          className="rounded-lg border border-[var(--border-soft)] bg-white px-2.5 py-1 text-xs text-[var(--muted)] hover:bg-[var(--surface-soft)]"
+        >
+          90 j
+        </button>
+        <button
+          type="button"
+          onClick={() => applyPreset(180)}
+          className="rounded-lg border border-[var(--border-soft)] bg-white px-2.5 py-1 text-xs text-[var(--muted)] hover:bg-[var(--surface-soft)]"
+        >
+          180 j
+        </button>
+        <button
+          type="button"
+          onClick={applyThisMonth}
+          className="rounded-lg border border-[var(--border-soft)] bg-white px-2.5 py-1 text-xs text-[var(--muted)] hover:bg-[var(--surface-soft)]"
+        >
+          Ce mois-ci
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── KPI card ─────────────────────────────────────────────────────────────────
 function KpiCard({
   label,
@@ -318,11 +411,11 @@ export function FinancesClient({ data: initialData }: { data: FinancesPageData }
   }
 
   const {
-    period,
-    today,
-    periodStart,
-    caTotal,
-    encaissements,
+    from,
+    to,
+    caEncaisse,
+    acomptes,
+    soldes,
     totalExpenses,
     profit,
     reservationsCount,
@@ -333,52 +426,36 @@ export function FinancesClient({ data: initialData }: { data: FinancesPageData }
   } = initialData;
 
   const maxMonthlyCA = Math.max(1, ...monthlyBuckets.map((b) => Math.max(b.ca, b.expenses)));
-  const maxForecast = Math.max(1, ...forecastMonths.map((m) => m.caTotal));
+  const maxForecast = Math.max(1, ...forecastMonths.map((m) => m.balancePending));
 
-  const totalForecastCA = forecastMonths.reduce((s, m) => s + m.caTotal, 0);
   const totalForecastPending = forecastMonths.reduce((s, m) => s + m.balancePending, 0);
-  const totalForecastDeposits = forecastMonths.reduce((s, m) => s + m.depositCollected, 0);
 
   return (
     <section className="grid gap-5">
-      {/* Header + period tabs */}
+      {/* Header + date range picker */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h2 className="text-xl font-light tracking-wide text-[var(--foreground)]">
             Analyse financière
           </h2>
           <p className="text-sm text-[var(--muted)]">
-            Du {formatDateFr(periodStart)} au {formatDateFr(today)}
+            Du {formatDateFr(from)} au {formatDateFr(to)}
           </p>
         </div>
-        <div className="flex gap-2">
-          {[30, 90, 180].map((value) => (
-            <a
-              key={value}
-              href={`/dashboard/finances?period=${value}`}
-              className={`rounded-lg border px-3 py-1.5 text-xs transition-colors ${
-                value === period
-                  ? "border-[var(--accent)] bg-[var(--surface-soft)] text-[var(--accent-deep)]"
-                  : "border-[var(--border-soft)] bg-white text-[var(--muted)] hover:bg-[var(--surface-soft)]"
-              }`}
-            >
-              {value} jours
-            </a>
-          ))}
-        </div>
+        <DateRangePicker from={from} to={to} />
       </div>
 
       {/* KPI cards */}
       <article className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
-          label={`CA (${reservationsCount} réservations)`}
-          value={formatAmount(caTotal)}
-          sub="Hors annulations et brouillons"
+          label={`CA encaissé (${reservationsCount} réservations)`}
+          value={formatAmount(caEncaisse)}
+          sub={`Dont ${formatAmount(soldes)} de soldes au 1er jour`}
         />
         <KpiCard
-          label="Encaissé"
-          value={formatAmount(encaissements)}
-          sub="Acomptes + soldes au 1er jour de location"
+          label="Acomptes encaissés"
+          value={formatAmount(acomptes)}
+          sub="À la date de réservation"
           highlight="neutral"
         />
         <KpiCard
@@ -518,90 +595,29 @@ export function FinancesClient({ data: initialData }: { data: FinancesPageData }
               Prévisions 6 mois
             </h3>
             <p className="text-sm text-[var(--muted)]">
-              Basé sur les réservations à venir (hors annulations)
+              Reste à encaisser sur les locations à venir (les acomptes sont déjà dans le CA actuel)
             </p>
           </div>
-          <div className="flex gap-6 text-sm">
-            <div>
-              <span className="text-[var(--muted)]">CA prévisionnel </span>
-              <span className="font-medium text-[var(--foreground)]">{formatAmount(totalForecastCA)}</span>
-            </div>
-            <div>
-              <span className="text-[var(--muted)]">Acomptes reçus </span>
-              <span className="font-medium text-emerald-700">{formatAmount(totalForecastDeposits)}</span>
-            </div>
-            <div>
-              <span className="text-[var(--muted)]">Reste à encaisser </span>
-              <span className="font-medium text-[var(--foreground)]">{formatAmount(totalForecastPending)}</span>
-            </div>
+          <div className="text-sm">
+            <span className="text-[var(--muted)]">Reste à encaisser </span>
+            <span className="font-medium text-[var(--foreground)]">{formatAmount(totalForecastPending)}</span>
           </div>
         </div>
 
-        {forecastMonths.every((m) => m.caTotal === 0) ? (
+        {forecastMonths.every((m) => m.balancePending === 0) ? (
           <p className="mt-4 text-sm text-[var(--muted)]">
-            Aucune réservation enregistrée pour les 6 prochains mois.
+            Aucun versement à venir pour les 6 prochains mois.
           </p>
         ) : (
-          <>
-            {/* Stacked bar: deposit (dark) + pending (light) = total */}
-            <div className="mt-4 flex items-end gap-2 overflow-x-auto pb-2">
-              {forecastMonths.map((m) => {
-                const safeMax = Math.max(1, maxForecast);
-                const totalH = Math.max(m.caTotal > 0 ? 8 : 0, Math.round((m.caTotal / safeMax) * 120));
-                const depositRatio = m.caTotal > 0 ? m.depositCollected / m.caTotal : 0;
-                const depositH = Math.round(totalH * depositRatio);
-                const pendingH = totalH - depositH;
-
-                return (
-                  <div key={m.key} className="flex min-w-[64px] flex-col items-center gap-1">
-                    <div className="text-[10px] text-[var(--muted)]">
-                      {Math.round(m.caTotal / 1000) > 0
-                        ? `${Math.round(m.caTotal / 1000)}k`
-                        : m.caTotal > 0
-                          ? m.caTotal.toFixed(0)
-                          : "—"}
-                    </div>
-                    <div className="flex h-32 w-10 flex-col justify-end">
-                      {pendingH > 0 && (
-                        <div
-                          className="w-full bg-[var(--accent)] opacity-30 rounded-t-sm"
-                          style={{ height: `${pendingH}px` }}
-                          title={`Reste à encaisser: ${formatAmount(m.balancePending)}`}
-                        />
-                      )}
-                      {depositH > 0 && (
-                        <div
-                          className="w-full bg-[var(--accent)]"
-                          style={{ height: `${depositH}px`, borderRadius: pendingH > 0 ? "0" : "4px 4px 0 0" }}
-                          title={`Acomptes reçus: ${formatAmount(m.depositCollected)}`}
-                        />
-                      )}
-                    </div>
-                    <div className="text-[10px] uppercase tracking-wide text-[var(--muted)] text-center">
-                      {m.label}
-                    </div>
-                    {m.balancePending > 0 && (
-                      <div className="text-[9px] text-[var(--muted)] text-center">
-                        +{Math.round(m.balancePending / 1000) > 0
-                          ? `${Math.round(m.balancePending / 1000)}k`
-                          : m.balancePending.toFixed(0)} att.
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-            <div className="mt-3 flex gap-4 text-xs text-[var(--muted)]">
-              <span className="flex items-center gap-1.5">
-                <span className="inline-block h-2.5 w-4 rounded-sm bg-[var(--accent)]" />
-                Acomptes reçus
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="inline-block h-2.5 w-4 rounded-sm bg-[var(--accent)] opacity-30" />
-                Reste à encaisser
-              </span>
-            </div>
-          </>
+          <BarChart
+            bars={forecastMonths.map((m) => ({
+              key: m.key,
+              label: m.label,
+              primary: m.balancePending,
+              primaryLabel: "Reste à encaisser",
+            }))}
+            maxValue={maxForecast}
+          />
         )}
       </article>
     </section>

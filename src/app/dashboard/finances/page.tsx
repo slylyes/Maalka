@@ -1,22 +1,29 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { FinancesClient } from "@/app/dashboard/finances/ui";
 
-function parsePeriodDays(value: string | undefined) {
-  const allowed = new Set([30, 90, 180]);
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || !allowed.has(parsed)) return 30;
-  return parsed;
+function isValidDate(value: string | undefined): value is string {
+  return !!value && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value));
 }
 
-function monthKey(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+function addDaysStr(dateStr: string, days: number) {
+  const d = new Date(dateStr + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
 }
 
-function monthLabel(date: Date) {
-  return date.toLocaleDateString("fr-FR", { month: "short", year: "2-digit" });
+function monthKeyFromDate(d: Date) {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
-type PageProps = { searchParams: Promise<{ period?: string }> };
+function monthLabelFromKey(key: string) {
+  const [y, m] = key.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("fr-FR", {
+    month: "short",
+    year: "2-digit",
+  });
+}
+
+type PageProps = { searchParams: Promise<{ from?: string; to?: string }> };
 
 export type Expense = {
   id: string;
@@ -38,28 +45,28 @@ export type CategoryAnalysis = {
 export type ForecastMonth = {
   key: string;
   label: string;
-  caTotal: number;
-  depositCollected: number;
+  // Reste à payer (versements à venir) — l'acompte est déjà compté dans le CA actuel
   balancePending: number;
 };
 
 export type FinancesPageData = {
-  period: number;
+  from: string;
+  to: string;
   today: string;
-  periodStart: string;
-  // Historical KPIs
-  caTotal: number;
-  encaissements: number;
+  // Cash-based KPIs over the selected range
+  caEncaisse: number; // acomptes + soldes encaissés
+  acomptes: number; // acomptes encaissés (à la date de réservation)
+  soldes: number; // soldes encaissés (au 1er jour de location)
   totalExpenses: number;
   profit: number;
   reservationsCount: number;
-  // Monthly evolution (historical)
+  // Monthly evolution (cash-based) over the range
   monthlyBuckets: { key: string; label: string; ca: number; expenses: number }[];
   // Expenses list
   expenses: Expense[];
   // Category analysis
   categoryAnalysis: CategoryAnalysis[];
-  // Forecast
+  // Forecast (6 months from current month)
   forecastMonths: ForecastMonth[];
   // For expense form
   dressCategories: string[];
@@ -68,87 +75,119 @@ export type FinancesPageData = {
 export default async function FinancesPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const supabase = await createSupabaseServerClient();
-  const period = parsePeriodDays(params.period);
 
   const today = new Date().toISOString().slice(0, 10);
-  const periodStartDate = new Date();
-  periodStartDate.setDate(periodStartDate.getDate() - (period - 1));
-  const periodStart = periodStartDate.toISOString().slice(0, 10);
 
-  const sixMonthsAhead = new Date();
-  sixMonthsAhead.setMonth(sixMonthsAhead.getMonth() + 6);
-  const forecastEnd = sixMonthsAhead.toISOString().slice(0, 10);
+  // ── Resolve selected date range ──────────────────────────────────────────
+  let to = isValidDate(params.to) ? params.to : today;
+  let from = isValidDate(params.from) ? params.from : addDaysStr(today, -29);
+  if (from > to) {
+    [from, to] = [to, from];
+  }
+  // Exclusive upper bound for created_at (timestamptz) filtering
+  const toExclusive = addDaysStr(to, 1);
+  // Balances are only collected once start_date has been reached (<= today)
+  const balanceTo = to < today ? to : today;
 
-  const [reservationsRes, expensesRes, futureRes, dressRowsRes, categoriesRes] = await Promise.all([
-    // Historical reservations (for CA/profit)
-    supabase
-      .from("reservations")
-      .select("id, start_date, status, total_price, deposit_paid, balance_due")
-      .gte("start_date", periodStart)
-      .lte("start_date", today)
-      .order("start_date", { ascending: true }),
+  // ── Forecast window: 6 months starting from the CURRENT month ────────────
+  const [ty, tm] = today.split("-").map(Number);
+  const forecastMonths: ForecastMonth[] = Array.from({ length: 6 }, (_, i) => {
+    const total = tm - 1 + i;
+    const y = ty + Math.floor(total / 12);
+    const m = (total % 12) + 1;
+    const key = `${y}-${String(m).padStart(2, "0")}`;
+    return { key, label: monthLabelFromKey(key), balancePending: 0 };
+  });
+  const totalEnd = tm - 1 + 6;
+  const fey = ty + Math.floor(totalEnd / 12);
+  const fem = (totalEnd % 12) + 1;
+  const forecastEnd = `${fey}-${String(fem).padStart(2, "0")}-01`;
 
-    // Expenses in period
-    supabase
-      .from("expenses")
-      .select("id, date, amount, category, dress_category, description, created_at")
-      .gte("date", periodStart)
-      .lte("date", today)
-      .order("date", { ascending: false }),
+  const [depositRowsRes, balanceRowsRes, expensesRes, futureRes, dressRowsRes, categoriesRes] =
+    await Promise.all([
+      // Acomptes encaissés: reservations created within the range
+      supabase
+        .from("reservations")
+        .select("id, deposit_paid, created_at, status")
+        .gte("created_at", from)
+        .lt("created_at", toExclusive)
+        .not("status", "in", '("cancelled","draft")'),
 
-    // Future reservations for forecast (next 6 months)
-    supabase
-      .from("reservations")
-      .select("id, start_date, status, total_price, deposit_paid, balance_due")
-      .gt("start_date", today)
-      .lte("start_date", forecastEnd)
-      .not("status", "in", '("cancelled","draft")')
-      .order("start_date", { ascending: true }),
+      // Soldes encaissés: reservations whose rental started within the range (and reached)
+      supabase
+        .from("reservations")
+        .select("id, total_price, deposit_paid, balance_due, start_date, status")
+        .gte("start_date", from)
+        .lte("start_date", balanceTo)
+        .not("status", "in", '("cancelled","draft")'),
 
-    // Reservation dresses in period (for category revenue)
-    supabase
-      .from("reservation_dresses")
-      .select("dress_id, price, start_date, status, dresses(category)")
-      .gte("start_date", periodStart)
-      .lte("start_date", today)
-      .not("status", "in", '("cancelled","draft")'),
+      // Expenses in range
+      supabase
+        .from("expenses")
+        .select("id, date, amount, category, dress_category, description, created_at")
+        .gte("date", from)
+        .lte("date", to)
+        .order("date", { ascending: false }),
 
-    // Distinct dress categories for the expense form
-    supabase.from("dresses").select("category"),
-  ]);
+      // Future reservations for forecast (reste à payer, de demain → +6 mois)
+      supabase
+        .from("reservations")
+        .select("id, start_date, status, balance_due")
+        .gt("start_date", today)
+        .lt("start_date", forecastEnd)
+        .not("status", "in", '("cancelled","draft")')
+        .order("start_date", { ascending: true }),
 
-  // ── Historical KPIs ──────────────────────────────────────────────────────
-  const analyticRows = (reservationsRes.data ?? []).filter(
-    (r) => r.status !== "cancelled" && r.status !== "draft"
-  );
+      // Reservation dresses with rentals started in range (for category revenue)
+      supabase
+        .from("reservation_dresses")
+        .select("dress_id, price, start_date, status, dresses(category)")
+        .gte("start_date", from)
+        .lte("start_date", balanceTo)
+        .not("status", "in", '("cancelled","draft")'),
 
-  const caTotal = analyticRows.reduce((s, r) => s + Number(r.total_price ?? 0), 0);
+      // Distinct dress categories for the expense form
+      supabase.from("dresses").select("category"),
+    ]);
 
-  // Encaissements: full amount for rentals that have started, deposit only for future ones
-  // (In a historical period start_date <= today for all rows, so encaissements = caTotal)
-  const encaissements = analyticRows.reduce((s, r) => {
-    if (r.start_date <= today) return s + Number(r.total_price ?? 0);
-    return s + Number(r.deposit_paid ?? 0);
-  }, 0);
+  const depositRows = depositRowsRes.data ?? [];
+  const balanceRows = balanceRowsRes.data ?? [];
+
+  // ── Cash-based KPIs ──────────────────────────────────────────────────────
+  const acomptes = depositRows.reduce((s, r) => s + Number(r.deposit_paid ?? 0), 0);
+  const soldes = balanceRows.reduce((s, r) => s + Number(r.balance_due ?? 0), 0);
+  const caEncaisse = acomptes + soldes;
 
   const expenses = (expensesRes.data ?? []) as Expense[];
   const totalExpenses = expenses.reduce((s, e) => s + Number(e.amount ?? 0), 0);
-  const profit = encaissements - totalExpenses;
-  const reservationsCount = analyticRows.length;
+  const profit = caEncaisse - totalExpenses;
 
-  // ── Monthly evolution (historical) ───────────────────────────────────────
-  const monthCount = Math.min(12, Math.max(3, Math.ceil(period / 30) + 1));
-  const monthlyBuckets = Array.from({ length: monthCount }, (_, i) => {
-    const d = new Date();
-    d.setDate(1);
-    d.setMonth(d.getMonth() - (monthCount - 1 - i));
-    return { key: monthKey(d), label: monthLabel(d), ca: 0, expenses: 0 };
-  });
+  const contributingIds = new Set<string>();
+  for (const r of depositRows) if (Number(r.deposit_paid ?? 0) > 0) contributingIds.add(r.id);
+  for (const r of balanceRows) if (Number(r.balance_due ?? 0) > 0) contributingIds.add(r.id);
+  const reservationsCount = contributingIds.size;
+
+  // ── Monthly evolution (cash-based) over the range ────────────────────────
+  const monthlyBuckets: { key: string; label: string; ca: number; expenses: number }[] = [];
+  {
+    const cur = new Date(from + "T00:00:00Z");
+    cur.setUTCDate(1);
+    const endM = new Date(to + "T00:00:00Z");
+    endM.setUTCDate(1);
+    while (cur <= endM && monthlyBuckets.length < 24) {
+      const key = monthKeyFromDate(cur);
+      monthlyBuckets.push({ key, label: monthLabelFromKey(key), ca: 0, expenses: 0 });
+      cur.setUTCMonth(cur.getUTCMonth() + 1);
+    }
+  }
   const monthIndexMap = new Map(monthlyBuckets.map((b, i) => [b.key, i]));
-
-  for (const r of analyticRows) {
+  for (const r of depositRows) {
+    const idx = monthIndexMap.get(String(r.created_at).slice(0, 7));
+    if (idx !== undefined) monthlyBuckets[idx].ca += Number(r.deposit_paid ?? 0);
+  }
+  for (const r of balanceRows) {
     const idx = monthIndexMap.get(r.start_date.slice(0, 7));
-    if (idx !== undefined) monthlyBuckets[idx].ca += Number(r.total_price ?? 0);
+    if (idx !== undefined) monthlyBuckets[idx].ca += Number(r.balance_due ?? 0);
   }
   for (const e of expenses) {
     const idx = monthIndexMap.get(e.date.slice(0, 7));
@@ -178,7 +217,6 @@ export default async function FinancesPage({ searchParams }: PageProps) {
     }
   }
 
-  // Merge all categories that appear in either revenue or purchases
   const allCategories = new Set([...categoryRevenue.keys(), ...categoryPurchases.keys()]);
   const categoryAnalysis: CategoryAnalysis[] = Array.from(allCategories)
     .map((cat) => {
@@ -188,20 +226,11 @@ export default async function FinancesPage({ searchParams }: PageProps) {
     })
     .sort((a, b) => b.revenue - a.revenue);
 
-  // ── Forecast (next 6 months) ─────────────────────────────────────────────
-  const forecastMonths: ForecastMonth[] = Array.from({ length: 6 }, (_, i) => {
-    const d = new Date();
-    d.setDate(1);
-    d.setMonth(d.getMonth() + 1 + i);
-    return { key: monthKey(d), label: monthLabel(d), caTotal: 0, depositCollected: 0, balancePending: 0 };
-  });
+  // ── Forecast bucketing ───────────────────────────────────────────────────
   const forecastIndexMap = new Map(forecastMonths.map((m, i) => [m.key, i]));
-
   for (const r of futureRes.data ?? []) {
     const idx = forecastIndexMap.get(r.start_date.slice(0, 7));
     if (idx !== undefined) {
-      forecastMonths[idx].caTotal += Number(r.total_price ?? 0);
-      forecastMonths[idx].depositCollected += Number(r.deposit_paid ?? 0);
       forecastMonths[idx].balancePending += Number(r.balance_due ?? 0);
     }
   }
@@ -212,11 +241,12 @@ export default async function FinancesPage({ searchParams }: PageProps) {
   ).sort((a, b) => (a ?? "").localeCompare(b ?? "", "fr")) as string[];
 
   const data: FinancesPageData = {
-    period,
+    from,
+    to,
     today,
-    periodStart,
-    caTotal,
-    encaissements,
+    caEncaisse,
+    acomptes,
+    soldes,
     totalExpenses,
     profit,
     reservationsCount,
