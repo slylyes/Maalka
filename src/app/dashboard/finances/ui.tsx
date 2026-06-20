@@ -507,9 +507,6 @@ export function FinancesClient({ data: initialData }: { data: FinancesPageData }
             <h3 className="text-lg font-light tracking-wide text-[var(--foreground)]">
               Rentabilité par catégorie de robe
             </h3>
-            <p className="mt-1 text-xs text-[var(--muted)]">
-              CA = loyers encaissés · Achats = dépenses catégorie &quot;Achat de robes&quot;
-            </p>
             {categoryAnalysis.length === 0 ? (
               <p className="mt-4 text-sm text-[var(--muted)]">
                 Aucune donnée disponible sur cette période.
@@ -520,8 +517,6 @@ export function FinancesClient({ data: initialData }: { data: FinancesPageData }
                   <thead>
                     <tr className="text-xs uppercase tracking-wide text-[var(--muted)]">
                       <th className="pb-2 pr-4 font-medium">Catégorie</th>
-                      <th className="pb-2 pr-4 font-medium text-right">CA loyers</th>
-                      <th className="pb-2 pr-4 font-medium text-right">Achats</th>
                       <th className="pb-2 font-medium text-right">Bénéfice</th>
                     </tr>
                   </thead>
@@ -534,20 +529,8 @@ export function FinancesClient({ data: initialData }: { data: FinancesPageData }
                         <td className="py-2.5 pr-4 font-medium text-[var(--foreground)]">
                           {row.category}
                         </td>
-                        <td className="py-2.5 pr-4 text-right">{formatAmount(row.revenue)}</td>
-                        <td className="py-2.5 pr-4 text-right">
-                          {row.purchaseExpenses > 0 ? (
-                            <span className="text-rose-700">{formatAmount(row.purchaseExpenses)}</span>
-                          ) : (
-                            "—"
-                          )}
-                        </td>
-                        <td
-                          className={`py-2.5 text-right font-medium ${
-                            row.profit >= 0 ? "text-emerald-700" : "text-rose-700"
-                          }`}
-                        >
-                          {formatAmount(row.profit)}
+                        <td className="py-2.5 text-right font-medium text-emerald-700">
+                          {formatAmount(row.revenue)}
                         </td>
                       </tr>
                     ))}
@@ -586,7 +569,7 @@ export function FinancesClient({ data: initialData }: { data: FinancesPageData }
               Prévisions 6 mois
             </h3>
             <p className="text-sm text-[var(--muted)]">
-              Reste à encaisser sur les locations à venir (les acomptes sont déjà dans le CA actuel)
+              Reste à encaisser sur les locations à venir
             </p>
           </div>
           <div className="text-sm">

@@ -34,9 +34,8 @@ export type Expense = {
 
 export type CategoryAnalysis = {
   category: string;
+  // Argent gagné en louant cette catégorie de robe (somme des loyers sur la période)
   revenue: number;
-  purchaseExpenses: number;
-  profit: number;
 };
 
 export type ForecastMonth = {
@@ -204,23 +203,8 @@ export default async function FinancesPage({ searchParams }: PageProps) {
     categoryRevenue.set(cat, (categoryRevenue.get(cat) ?? 0) + Number(rd.price ?? 0));
   }
 
-  const categoryPurchases = new Map<string, number>();
-  for (const e of expenses) {
-    if (e.category === "achat_robes" && e.dress_category) {
-      categoryPurchases.set(
-        e.dress_category,
-        (categoryPurchases.get(e.dress_category) ?? 0) + Number(e.amount ?? 0)
-      );
-    }
-  }
-
-  const allCategories = new Set([...categoryRevenue.keys(), ...categoryPurchases.keys()]);
-  const categoryAnalysis: CategoryAnalysis[] = Array.from(allCategories)
-    .map((cat) => {
-      const revenue = categoryRevenue.get(cat) ?? 0;
-      const purchaseExpenses = categoryPurchases.get(cat) ?? 0;
-      return { category: cat, revenue, purchaseExpenses, profit: revenue - purchaseExpenses };
-    })
+  const categoryAnalysis: CategoryAnalysis[] = Array.from(categoryRevenue.entries())
+    .map(([category, revenue]) => ({ category, revenue }))
     .sort((a, b) => b.revenue - a.revenue);
 
   // ── Forecast bucketing ───────────────────────────────────────────────────
