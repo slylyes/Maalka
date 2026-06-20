@@ -44,7 +44,7 @@ export async function GET(_: Request, { params }: Params) {
   const { data, error } = await supabase
     .from("reservations")
     .select(
-      "id, contract_number, client_id, start_date, end_date, status, total_price, deposit_paid, balance_due, caution_amount, caution_status, pickup_datetime, return_datetime, notes, created_at, updated_at, reservation_dresses(dress_id, price, base_price, discount_amount, dresses(reference,name)), clients(first_name,last_name,phone,email,address)"
+      "id, contract_number, client_id, start_date, end_date, status, total_price, discount_amount, supplement, deposit_paid, balance_due, caution_amount, caution_status, pickup_datetime, return_datetime, notes, created_at, updated_at, reservation_dresses(dress_id, price, base_price, discount_amount, dresses(reference,name)), clients(first_name,last_name,phone,email,address)"
     )
     .eq("id", id)
     .single();
@@ -128,14 +128,17 @@ export async function PATCH(request: Request, { params }: Params) {
       typeof payload.discount_amount === "number" && payload.discount_amount >= 0
         ? payload.discount_amount
         : 0;
+    const supplement =
+      typeof payload.supplement === "number" && payload.supplement >= 0 ? payload.supplement : 0;
     const baseTotal = dressRows.reduce((s, d) => s + Number(d.price ?? 0), 0);
-    const totalPrice = Math.max(baseTotal - discountAmount, 0);
+    const totalPrice = Math.max(baseTotal - discountAmount, 0) + supplement;
 
     if (discountAmount > baseTotal) {
       return badRequest("La remise ne peut pas dépasser le prix total.");
     }
 
     updatePayload.total_price = totalPrice;
+    updatePayload.supplement = supplement;
     // Keep the legacy reservations.dress_id column consistent with the first dress
     updatePayload.dress_id = newDressIds[0];
 
@@ -217,7 +220,7 @@ export async function PATCH(request: Request, { params }: Params) {
     .update(updatePayload)
     .eq("id", id)
     .select(
-      "id, contract_number, client_id, start_date, end_date, status, total_price, deposit_paid, balance_due, caution_amount, caution_status, pickup_datetime, return_datetime, notes, created_at, updated_at"
+      "id, contract_number, client_id, start_date, end_date, status, total_price, discount_amount, supplement, deposit_paid, balance_due, caution_amount, caution_status, pickup_datetime, return_datetime, notes, created_at, updated_at"
     )
     .single();
 

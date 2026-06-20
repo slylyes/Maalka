@@ -13,6 +13,7 @@ type ReservationPdfData = {
   baseTotal: number;
   totalPrice: number;
   discountAmount: number;
+  supplement: number;
   depositPaid: number;
   balanceDue: number;
   cautionAmount: number;
@@ -247,6 +248,12 @@ function ContractDocument({ data, logoDataUrl }: { data: ReservationPdfData; log
               <Money value={data.discountAmount} />
             </View>
           ) : null}
+          {data.supplement > 0 ? (
+            <View style={styles.row}>
+              <Text>Supplément</Text>
+              <Money value={data.supplement} />
+            </View>
+          ) : null}
           <View style={styles.row}>
             <Text>Prix total</Text>
             <Money value={data.totalPrice} />
@@ -355,6 +362,12 @@ function InvoiceDocument({ data, logoDataUrl }: { data: ReservationPdfData; logo
             <View style={styles.row}>
               <Text>Remise</Text>
               <Money value={data.discountAmount} />
+            </View>
+          ) : null}
+          {data.supplement > 0 ? (
+            <View style={styles.row}>
+              <Text>Supplément</Text>
+              <Money value={data.supplement} />
             </View>
           ) : null}
           <View style={styles.row}>

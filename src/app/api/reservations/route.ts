@@ -59,7 +59,7 @@ export async function GET() {
   const { data, error } = await supabase
     .from("reservations")
     .select(
-      "id, contract_number, client_id, start_date, end_date, status, total_price, deposit_paid, balance_due, caution_amount, caution_status, pickup_datetime, return_datetime, notes, created_at, updated_at, reservation_dresses(dress_id, price, base_price, discount_amount, dresses(reference,name)), clients(first_name,last_name,phone,email)"
+      "id, contract_number, client_id, start_date, end_date, status, total_price, discount_amount, supplement, deposit_paid, balance_due, caution_amount, caution_status, pickup_datetime, return_datetime, notes, created_at, updated_at, reservation_dresses(dress_id, price, base_price, discount_amount, dresses(reference,name)), clients(first_name,last_name,phone,email)"
     )
     .order("created_at", { ascending: false });
 
@@ -128,6 +128,8 @@ export async function POST(request: Request) {
     typeof payload.discount_amount === "number" && payload.discount_amount >= 0
       ? payload.discount_amount
       : 0;
+  const supplement =
+    typeof payload.supplement === "number" && payload.supplement >= 0 ? payload.supplement : 0;
   const cautionAmount =
     typeof payload.caution_amount === "number" && payload.caution_amount >= 0
       ? payload.caution_amount
@@ -148,7 +150,7 @@ export async function POST(request: Request) {
   }
 
   const baseTotal = orderedDressRows.reduce((sum, dress) => sum + Number(dress.price ?? 0), 0);
-  const totalPrice = Math.max(baseTotal - discountAmount, 0);
+  const totalPrice = Math.max(baseTotal - discountAmount, 0) + supplement;
 
   if (discountAmount > baseTotal) {
     return badRequest("La remise ne peut pas dépasser le prix total.");
@@ -179,6 +181,7 @@ export async function POST(request: Request) {
       status: "reserved",
       total_price: totalPrice,
       discount_amount: discountAmount,
+      supplement,
       deposit_paid: depositPaid,
       caution_amount: cautionAmount,
       caution_status: cautionStatus,
@@ -188,7 +191,7 @@ export async function POST(request: Request) {
       created_by: user.id,
     })
     .select(
-      "id, contract_number, client_id, start_date, end_date, status, total_price, deposit_paid, balance_due, caution_amount, caution_status, pickup_datetime, return_datetime, notes, created_at, updated_at"
+      "id, contract_number, client_id, start_date, end_date, status, total_price, discount_amount, supplement, deposit_paid, balance_due, caution_amount, caution_status, pickup_datetime, return_datetime, notes, created_at, updated_at"
     )
     .single();
 

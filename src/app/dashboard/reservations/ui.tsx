@@ -21,6 +21,7 @@ type Reservation = {
   end_date: string;
   status: string;
   total_price: number;
+  supplement?: number | null;
   deposit_paid: number;
   balance_due: number;
   caution_amount: number;
@@ -191,6 +192,9 @@ function EditReservationModal({
     );
     return total > 0 ? String(total) : "";
   });
+  const [supplement, setSupplement] = useState(() =>
+    Number(reservation.supplement ?? 0) > 0 ? String(reservation.supplement) : ""
+  );
   const [depositPaid, setDepositPaid] = useState(String(reservation.deposit_paid));
   const [cautionAmount, setCautionAmount] = useState(String(reservation.caution_amount));
   const [cautionStatus, setCautionStatus] = useState(reservation.caution_status);
@@ -210,7 +214,9 @@ function EditReservationModal({
   const baseTotal = selectedDresses.reduce((s, d) => s + Number(d.price ?? 0), 0);
   const parsedDiscount = discountAmount.trim().length > 0 ? Number(discountAmount) : 0;
   const safeDiscount = Number.isFinite(parsedDiscount) ? Math.max(parsedDiscount, 0) : 0;
-  const computedTotal = Math.max(baseTotal - safeDiscount, 0);
+  const parsedSupplement = supplement.trim().length > 0 ? Number(supplement) : 0;
+  const safeSupplement = Number.isFinite(parsedSupplement) ? Math.max(parsedSupplement, 0) : 0;
+  const computedTotal = Math.max(baseTotal - safeDiscount, 0) + safeSupplement;
 
   const clientOptions = useMemo(
     () =>
@@ -268,6 +274,7 @@ function EditReservationModal({
         status,
         dress_ids: dressIds,
         discount_amount: safeDiscount,
+        supplement: safeSupplement,
         total_price: computedTotal,
         deposit_paid: parsedDeposit,
         caution_amount: Number(cautionAmount) || 0,
@@ -423,6 +430,21 @@ function EditReservationModal({
 
           <div>
             <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">
+              Supplément (DA)
+            </label>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              value={supplement}
+              onChange={(e) => setSupplement(e.target.value)}
+              placeholder="Ex: journée supplémentaire"
+              className="premium-input w-full"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">
               Prix total (DA)
             </label>
             <input
@@ -526,6 +548,7 @@ export function ReservationsClient({
   const [endDate, setEndDate] = useState("");
   const [depositPaid, setDepositPaid] = useState("");
   const [discountAmount, setDiscountAmount] = useState("");
+  const [supplement, setSupplement] = useState("");
   const [cautionAmount, setCautionAmount] = useState("");
   const [cautionStatus, setCautionStatus] = useState("pending");
   const [notes, setNotes] = useState("");
@@ -538,7 +561,9 @@ export function ReservationsClient({
   const baseTotalValue = selectedDresses.reduce((total, dress) => total + Number(dress.price || 0), 0);
   const parsedDiscount = discountAmount.trim().length > 0 ? Number(discountAmount) : 0;
   const safeDiscount = Number.isFinite(parsedDiscount) ? Math.max(parsedDiscount, 0) : 0;
-  const totalPriceValue = Math.max(baseTotalValue - safeDiscount, 0);
+  const parsedSupplement = supplement.trim().length > 0 ? Number(supplement) : 0;
+  const safeSupplement = Number.isFinite(parsedSupplement) ? Math.max(parsedSupplement, 0) : 0;
+  const totalPriceValue = Math.max(baseTotalValue - safeDiscount, 0) + safeSupplement;
   const totalPrice = selectedDresses.length ? totalPriceValue.toFixed(2) : "";
 
   const availableDressesForPicker = useMemo(
@@ -652,6 +677,7 @@ export function ReservationsClient({
         start_date: startDate,
         end_date: endDate,
         discount_amount: safeDiscount,
+        supplement: safeSupplement,
         deposit_paid: parsedDeposit,
         caution_amount: cautionAmount.trim().length > 0 ? Number(cautionAmount) : 0,
         caution_status: cautionStatus,
@@ -674,6 +700,7 @@ export function ReservationsClient({
     setEndDate("");
     setDepositPaid("");
     setDiscountAmount("");
+    setSupplement("");
     setCautionAmount("");
     setCautionStatus("pending");
     setNotes("");
@@ -808,6 +835,15 @@ export function ReservationsClient({
               placeholder="Remise (DA)"
               value={discountAmount}
               onChange={(event) => setDiscountAmount(event.target.value)}
+              className="premium-input w-full"
+            />
+            <input
+              min={0}
+              type="number"
+              step="0.01"
+              placeholder="Supplément (DA) — ex: journée en plus"
+              value={supplement}
+              onChange={(event) => setSupplement(event.target.value)}
               className="premium-input w-full"
             />
             <input
