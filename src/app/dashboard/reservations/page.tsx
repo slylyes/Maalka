@@ -1,5 +1,6 @@
 import { ReservationsClient } from "@/app/dashboard/reservations/ui";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { firstRelation } from "@/lib/relations";
 
 export default async function ReservationsPage() {
   const supabase = await createSupabaseServerClient();
@@ -30,9 +31,9 @@ export default async function ReservationsPage() {
         : []
     ).map((item) => ({
       ...item,
-      dresses: Array.isArray(item.dresses) ? item.dresses[0] ?? null : item.dresses,
+      dresses: firstRelation(item.dresses),
     })),
-    clients: Array.isArray(reservation.clients) ? reservation.clients[0] ?? null : reservation.clients,
+    clients: firstRelation(reservation.clients),
   }));
 
   return (

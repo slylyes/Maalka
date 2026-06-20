@@ -1,6 +1,7 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { FinancesClient } from "@/app/dashboard/finances/ui";
 import { isValidDate } from "@/lib/format";
+import { firstRelation } from "@/lib/relations";
 
 function addDaysStr(dateStr: string, days: number) {
   const d = new Date(dateStr + "T00:00:00Z");
@@ -191,11 +192,6 @@ export default async function FinancesPage({ searchParams }: PageProps) {
   }
 
   // ── Category analysis ────────────────────────────────────────────────────
-  const firstRelation = <T,>(v: T | T[] | null | undefined): T | null => {
-    if (!v) return null;
-    return Array.isArray(v) ? (v[0] ?? null) : v;
-  };
-
   const categoryRevenue = new Map<string, number>();
   for (const rd of dressRowsRes.data ?? []) {
     const dress = firstRelation(rd.dresses as { category?: string } | { category?: string }[] | null);

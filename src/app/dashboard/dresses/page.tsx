@@ -11,32 +11,40 @@ export default async function DressesPage() {
     )
     .order("created_at", { ascending: false });
 
-  const withPhotoUrl = await Promise.all(
-    (data ?? []).map(async (dress) => {
-      const photos = dress.dress_photos ?? [];
-      const primary = photos.find((photo) => photo.is_primary) ?? photos[0] ?? null;
+  // Récupère le chemin de la photo principale de chaque robe, puis génère TOUTES
+  // les URLs signées en un seul appel batch (au lieu d'un appel par robe).
+  const primaryPathByDress = new Map<string, string>();
+  for (const dress of data ?? []) {
+    const photos = dress.dress_photos ?? [];
+    const primary = photos.find((photo) => photo.is_primary) ?? photos[0] ?? null;
+    if (primary?.storage_path) primaryPathByDress.set(dress.id, primary.storage_path);
+  }
 
-      let primaryPhotoUrl: string | null = null;
-      if (primary?.storage_path) {
-        const { data: signedData } = await supabase.storage
-          .from("dresses")
-          .createSignedUrl(primary.storage_path, 3600);
-        primaryPhotoUrl = signedData?.signedUrl ?? null;
-      }
+  const uniquePaths = Array.from(new Set(primaryPathByDress.values()));
+  const signedUrlByPath = new Map<string, string>();
+  if (uniquePaths.length > 0) {
+    const { data: signedList } = await supabase.storage
+      .from("dresses")
+      .createSignedUrls(uniquePaths, 3600);
+    for (const signed of signedList ?? []) {
+      if (signed.path && signed.signedUrl) signedUrlByPath.set(signed.path, signed.signedUrl);
+    }
+  }
 
-      return {
-        id: dress.id,
-        reference: dress.reference,
-        name: dress.name,
-        category: dress.category,
-        price: Number(dress.price),
-        size: dress.size,
-        status: dress.status,
-        notes: dress.notes,
-        primary_photo_url: primaryPhotoUrl,
-      };
-    })
-  );
+  const withPhotoUrl = (data ?? []).map((dress) => {
+    const path = primaryPathByDress.get(dress.id);
+    return {
+      id: dress.id,
+      reference: dress.reference,
+      name: dress.name,
+      category: dress.category,
+      price: Number(dress.price),
+      size: dress.size,
+      status: dress.status,
+      notes: dress.notes,
+      primary_photo_url: path ? signedUrlByPath.get(path) ?? null : null,
+    };
+  });
 
   return <DressesClient initialDresses={withPhotoUrl} />;
 }

@@ -1,6 +1,8 @@
 "use client";
 
-import { FormEvent, useCallback, useState } from "react";
+import React, { useCallback, useState } from "react";
+
+import { useEscapeKey } from "@/lib/use-escape-key";
 
 type Client = {
   id: string;
@@ -34,7 +36,9 @@ function EditClientModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  useEscapeKey(onClose);
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitting(true);
     setError(null);
@@ -196,7 +200,7 @@ export function ClientsClient({ initialClients }: ClientsClientProps) {
     setLoading(false);
   }, []);
 
-  async function createClient(event: FormEvent<HTMLFormElement>) {
+  async function createClient(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitting(true);
     setError(null);
@@ -250,46 +254,61 @@ export function ClientsClient({ initialClients }: ClientsClientProps) {
       <article className="premium-card p-6 xl:col-span-4">
         <h2 className="text-xl font-light tracking-wide text-[var(--foreground)]">Nouveau client</h2>
         <form className="mt-3 space-y-3" onSubmit={createClient}>
-          <input
-            required
-            placeholder="Prénom"
-            value={firstName}
-            onChange={(event) => setFirstName(event.target.value)}
-            className="premium-input w-full"
-          />
-          <input
-            required
-            placeholder="Nom"
-            value={lastName}
-            onChange={(event) => setLastName(event.target.value)}
-            className="premium-input w-full"
-          />
-          <input
-            required
-            placeholder="Téléphone"
-            value={phone}
-            onChange={(event) => setPhone(event.target.value)}
-            className="premium-input w-full"
-          />
-          <input
-            type="email"
-            placeholder="Email (optionnel)"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            className="premium-input w-full"
-          />
-          <input
-            placeholder="Adresse"
-            value={address}
-            onChange={(event) => setAddress(event.target.value)}
-            className="premium-input w-full"
-          />
-          <textarea
-            placeholder="Notes"
-            value={notes}
-            onChange={(event) => setNotes(event.target.value)}
-            className="premium-input min-h-24 w-full"
-          />
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">Prénom</label>
+              <input
+                required
+                value={firstName}
+                onChange={(event) => setFirstName(event.target.value)}
+                className="premium-input w-full"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">Nom</label>
+              <input
+                required
+                value={lastName}
+                onChange={(event) => setLastName(event.target.value)}
+                className="premium-input w-full"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">Téléphone</label>
+            <input
+              required
+              value={phone}
+              onChange={(event) => setPhone(event.target.value)}
+              className="premium-input w-full"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">Email</label>
+            <input
+              type="email"
+              placeholder="Optionnel"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              className="premium-input w-full"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">Adresse</label>
+            <input
+              value={address}
+              onChange={(event) => setAddress(event.target.value)}
+              className="premium-input w-full"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">Notes</label>
+            <textarea
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+              className="premium-input min-h-24 w-full"
+            />
+          </div>
           <button
             type="submit"
             disabled={submitting}

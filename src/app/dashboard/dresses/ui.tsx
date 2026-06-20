@@ -2,9 +2,10 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { FormEvent, useCallback, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 
 import { formatAmount, formatDateFr } from "@/lib/format";
+import { useEscapeKey } from "@/lib/use-escape-key";
 
 type Dress = {
   id: string;
@@ -77,7 +78,9 @@ function EditDressModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  useEscapeKey(onClose);
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitting(true);
     setError(null);
@@ -376,7 +379,7 @@ export function DressesClient({ initialDresses }: DressesClientProps) {
     [loadCalendar, selectedDressId]
   );
 
-  async function saveDress(event: FormEvent<HTMLFormElement>) {
+  async function saveDress(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitting(true);
     setError(null);
@@ -436,7 +439,7 @@ export function DressesClient({ initialDresses }: DressesClientProps) {
     setError(json.error || "Suppression impossible pour cette robe.");
   }
 
-  async function uploadPhoto(event: FormEvent<HTMLFormElement>) {
+  async function uploadPhoto(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedDressId) return;
 
@@ -481,62 +484,84 @@ export function DressesClient({ initialDresses }: DressesClientProps) {
     setCalendarRows([]);
   }
 
+  // Échap ferme la modale « Gérer » (la modale d'édition gère son propre Échap).
+  useEscapeKey(() => {
+    if (selectedDressId) closeManage();
+  });
+
   return (
     <>
     <section className="grid gap-5 xl:grid-cols-12">
       <article className="premium-card p-6 xl:col-span-4">
         <h2 className="text-xl font-light tracking-wide text-[var(--foreground)]">Nouvelle robe</h2>
         <form className="mt-3 space-y-3" onSubmit={saveDress}>
-          <input
-            required
-            placeholder="Référence"
-            value={reference}
-            onChange={(event) => setReference(event.target.value)}
-            className="premium-input w-full"
-          />
-          <input
-            placeholder="Nom"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            className="premium-input w-full"
-          />
-          <select
-            required
-            value={category}
-            onChange={(event) => setCategory(event.target.value)}
-            className="premium-input w-full"
-          >
-            <option value="" disabled>
-              Catégorie
-            </option>
-            {categoryOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-          <input
-            required
-            min={0}
-            type="number"
-            step="0.01"
-            placeholder="Prix initial"
-            value={price}
-            onChange={(event) => setPrice(event.target.value)}
-            className="premium-input w-full"
-          />
-          <input
-            placeholder="Taille"
-            value={size}
-            onChange={(event) => setSize(event.target.value)}
-            className="premium-input w-full"
-          />
-          <textarea
-            placeholder="Notes"
-            value={notes}
-            onChange={(event) => setNotes(event.target.value)}
-            className="premium-input min-h-24 w-full"
-          />
+          <div>
+            <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">Référence</label>
+            <input
+              required
+              value={reference}
+              onChange={(event) => setReference(event.target.value)}
+              className="premium-input w-full"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">Nom</label>
+            <input
+              placeholder="Optionnel"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              className="premium-input w-full"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">Catégorie</label>
+              <select
+                required
+                value={category}
+                onChange={(event) => setCategory(event.target.value)}
+                className="premium-input w-full"
+              >
+                <option value="" disabled>
+                  Catégorie
+                </option>
+                {categoryOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">Prix initial (DA)</label>
+              <input
+                required
+                min={0}
+                type="number"
+                step="0.01"
+                value={price}
+                onChange={(event) => setPrice(event.target.value)}
+                className="premium-input w-full"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">Taille</label>
+            <input
+              placeholder="Optionnel"
+              value={size}
+              onChange={(event) => setSize(event.target.value)}
+              className="premium-input w-full"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">Notes</label>
+            <textarea
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+              className="premium-input min-h-24 w-full"
+            />
+          </div>
           <button
             disabled={submitting}
             type="submit"
@@ -580,6 +605,8 @@ export function DressesClient({ initialDresses }: DressesClientProps) {
                         <img
                           src={dress.primary_photo_url}
                           alt={dress.name ?? dress.reference}
+                          loading="lazy"
+                          decoding="async"
                           className="h-full w-full object-cover"
                         />
                       ) : (
@@ -714,6 +741,8 @@ export function DressesClient({ initialDresses }: DressesClientProps) {
                         <img
                           src={photo.url}
                           alt={photo.is_primary ? "Photo principale" : "Photo"}
+                          loading="lazy"
+                          decoding="async"
                           className="h-full w-full object-cover"
                         />
                       ) : (

@@ -3,6 +3,7 @@
 import React, { useCallback, useState, useMemo, useRef, useEffect } from "react";
 
 import { formatAmount, formatDateFr } from "@/lib/format";
+import { useEscapeKey } from "@/lib/use-escape-key";
 
 type DressOption = {
   id: string;
@@ -201,6 +202,8 @@ function EditReservationModal({
   const [notes, setNotes] = useState(reservation.notes ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEscapeKey(onClose);
 
   const selectedDresses = useMemo(
     () => allDresses.filter((d) => dressIds.includes(d.id)),
@@ -535,10 +538,11 @@ export function ReservationsClient({
   initialClients,
 }: ReservationsClientProps) {
   const [reservations, setReservations] = useState<Reservation[]>(initialReservations);
-  const [dresses, setDresses] = useState<DressOption[]>(initialDresses);
-  const [clients, setClients] = useState<ClientOption[]>(initialClients);
+  const dresses = initialDresses;
+  const clients = initialClients;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   // Create form state
   const [dressId, setDressId] = useState("");
@@ -595,28 +599,32 @@ export function ReservationsClient({
       (item) => item.dresses?.name || item.dresses?.reference || "Robe"
     );
 
-  const loadData = useCallback(async () => {
+  const filteredReservations = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return reservations;
+    return reservations.filter((reservation) => {
+      const clientName = `${reservation.clients?.first_name ?? ""} ${reservation.clients?.last_name ?? ""}`;
+      const dressText = (reservation.reservation_dresses ?? [])
+        .map((item) => `${item.dresses?.name ?? ""} ${item.dresses?.reference ?? ""}`)
+        .join(" ");
+      return [clientName, reservation.contract_number, dressText].some((value) =>
+        value.toLowerCase().includes(query)
+      );
+    });
+  }, [reservations, search]);
+
+  // Rafraîchissement ciblé : seules les réservations changent après une mutation
+  // de réservation (les listes robes/clients sont inchangées) → 1 requête au lieu de 3.
+  const reloadReservations = useCallback(async () => {
     setLoading(true);
-    setError(null);
-    const [reservationsRes, dressesRes, clientsRes] = await Promise.all([
-      fetch("/api/reservations", { cache: "no-store" }),
-      fetch("/api/dresses", { cache: "no-store" }),
-      fetch("/api/clients", { cache: "no-store" }),
-    ]);
-
-    const [reservationsJson, dressesJson, clientsJson] = await Promise.all([
-      reservationsRes.json(),
-      dressesRes.json(),
-      clientsRes.json(),
-    ]);
-
-    if (!reservationsRes.ok) {
-      setError(reservationsJson.error || "Erreur chargement réservations");
+    const response = await fetch("/api/reservations", { cache: "no-store" });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setError(json.error || "Erreur chargement réservations");
       setLoading(false);
       return;
     }
-
-    const normalizedReservations = (reservationsJson.data ?? []).map((reservation: Reservation) => ({
+    const normalized = (json.data ?? []).map((reservation: Reservation) => ({
       ...reservation,
       reservation_dresses: Array.isArray(reservation.reservation_dresses)
         ? reservation.reservation_dresses
@@ -624,9 +632,7 @@ export function ReservationsClient({
           ? [reservation.reservation_dresses]
           : [],
     }));
-    setReservations(normalizedReservations);
-    setDresses(dressesJson.data ?? []);
-    setClients(clientsJson.data ?? []);
+    setReservations(normalized);
     setLoading(false);
   }, []);
 
@@ -697,7 +703,7 @@ export function ReservationsClient({
     setCautionStatus("pending");
     setNotes("");
     setSubmitting(false);
-    await loadData();
+    await reloadReservations();
   }
 
   async function deleteReservation(id: string) {
@@ -706,7 +712,7 @@ export function ReservationsClient({
     const json = await response.json().catch(() => ({}));
 
     if (response.ok) {
-      await loadData();
+      await reloadReservations();
       return;
     }
 
@@ -721,7 +727,7 @@ export function ReservationsClient({
           allDresses={dresses}
           clients={clients}
           onClose={() => setEditingReservation(null)}
-          onSaved={loadData}
+          onSaved={reloadReservations}
         />
       ) : null}
 
@@ -797,80 +803,111 @@ export function ReservationsClient({
             </div>
 
             <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">Début</label>
+                <input
+                  required
+                  type="date"
+                  value={startDate}
+                  onChange={(event) => setStartDate(event.target.value)}
+                  className="premium-input w-full"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">Fin</label>
+                <input
+                  required
+                  type="date"
+                  value={endDate}
+                  onChange={(event) => setEndDate(event.target.value)}
+                  className="premium-input w-full"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">Remise (DA)</label>
+                <input
+                  min={0}
+                  type="number"
+                  step="0.01"
+                  value={discountAmount}
+                  onChange={(event) => setDiscountAmount(event.target.value)}
+                  className="premium-input w-full"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">Supplément (DA)</label>
+                <input
+                  min={0}
+                  type="number"
+                  step="0.01"
+                  placeholder="ex: journée en plus"
+                  value={supplement}
+                  onChange={(event) => setSupplement(event.target.value)}
+                  className="premium-input w-full"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">Prix total (auto)</label>
               <input
-                required
-                type="date"
-                value={startDate}
-                onChange={(event) => setStartDate(event.target.value)}
-                className="premium-input w-full"
-              />
-              <input
-                required
-                type="date"
-                value={endDate}
-                onChange={(event) => setEndDate(event.target.value)}
-                className="premium-input w-full"
+                readOnly
+                type="text"
+                placeholder="Prix total (auto)"
+                value={totalPrice}
+                className="premium-input w-full bg-[var(--surface-soft)]"
               />
             </div>
 
-            <input
-              readOnly
-              type="text"
-              placeholder="Prix total (auto)"
-              value={totalPrice}
-              className="premium-input w-full"
-            />
-            <input
-              min={0}
-              type="number"
-              step="0.01"
-              placeholder="Remise (DA)"
-              value={discountAmount}
-              onChange={(event) => setDiscountAmount(event.target.value)}
-              className="premium-input w-full"
-            />
-            <input
-              min={0}
-              type="number"
-              step="0.01"
-              placeholder="Supplément (DA) — ex: journée en plus"
-              value={supplement}
-              onChange={(event) => setSupplement(event.target.value)}
-              className="premium-input w-full"
-            />
-            <input
-              min={0}
-              type="number"
-              step="0.01"
-              placeholder="Acompte total (DA)"
-              value={depositPaid}
-              onChange={(event) => setDepositPaid(event.target.value)}
-              className="premium-input w-full"
-            />
-            <input
-              min={0}
-              type="number"
-              step="0.01"
-              placeholder="Montant caution total (DA)"
-              value={cautionAmount}
-              onChange={(event) => setCautionAmount(event.target.value)}
-              className="premium-input w-full"
-            />
-            <select
-              value={cautionStatus}
-              onChange={(event) => setCautionStatus(event.target.value)}
-              className="premium-input w-full"
-            >
-              <option value="pending">Caution en attente</option>
-              <option value="received">Caution reçue</option>
-              <option value="not_required">Pas de caution</option>
-            </select>
-            <textarea
-              placeholder="Notes"
-              value={notes}
-              onChange={(event) => setNotes(event.target.value)}
-              className="premium-input min-h-24 w-full"
-            />
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">Acompte (DA)</label>
+                <input
+                  min={0}
+                  type="number"
+                  step="0.01"
+                  value={depositPaid}
+                  onChange={(event) => setDepositPaid(event.target.value)}
+                  className="premium-input w-full"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">Caution (DA)</label>
+                <input
+                  min={0}
+                  type="number"
+                  step="0.01"
+                  value={cautionAmount}
+                  onChange={(event) => setCautionAmount(event.target.value)}
+                  className="premium-input w-full"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">Statut caution</label>
+              <select
+                value={cautionStatus}
+                onChange={(event) => setCautionStatus(event.target.value)}
+                className="premium-input w-full"
+              >
+                <option value="pending">Caution en attente</option>
+                <option value="received">Caution reçue</option>
+                <option value="not_required">Pas de caution</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">Notes</label>
+              <textarea
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+                className="premium-input min-h-24 w-full"
+              />
+            </div>
             <button
               disabled={submitting}
               type="submit"
@@ -883,10 +920,22 @@ export function ReservationsClient({
         </article>
 
         <article className="premium-card p-6 xl:col-span-8">
-          <h2 className="text-xl font-light tracking-wide text-[var(--foreground)]">Réservations</h2>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="text-xl font-light tracking-wide text-[var(--foreground)]">Réservations</h2>
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Rechercher (client, contrat, robe…)"
+              className="premium-input w-full sm:max-w-xs"
+            />
+          </div>
           {loading ? <p className="mt-3 text-sm text-[var(--muted)]">Chargement...</p> : null}
+          {!loading && reservations.length > 0 && filteredReservations.length === 0 ? (
+            <p className="mt-4 text-sm text-[var(--muted)]">Aucune réservation ne correspond à « {search} ».</p>
+          ) : null}
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            {reservations.map((reservation) => {
+            {filteredReservations.map((reservation) => {
               const dressNames = reservationDressNames(reservation);
               const balance = Number(reservation.balance_due ?? 0);
               return (

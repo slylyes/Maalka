@@ -2,15 +2,11 @@ import Link from "next/link";
 import { CalendarDaysIcon } from "@heroicons/react/24/outline";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { formatAmount, formatDateFr } from "@/lib/format";
+import { firstRelation } from "@/lib/relations";
 
 type DressListItem = {
   dresses?: { reference?: string; name?: string } | { reference?: string; name?: string }[] | null;
 };
-
-function firstRelation<T>(value: T[] | T | null | undefined): T | null {
-  if (!value) return null;
-  return Array.isArray(value) ? (value[0] ?? null) : value;
-}
 
 function dressReferences(items: DressListItem[] | null | undefined): string[] {
   if (!items || items.length === 0) return [];
@@ -112,25 +108,39 @@ export default async function DashboardPage() {
     return d.toISOString().slice(0, 10);
   })();
 
-  // Sync dress availability
-  const { data: activeDressRows } = await supabase
-    .from("reservation_dresses")
-    .select("dress_id")
-    .in("status", ["reserved", "rented", "preparing"])
-    .lte("start_date", today)
-    .gte("end_date", today);
+  // Réconciliation quotidienne des statuts robes (available <-> reserved selon la
+  // période courante). Diff-based : on n'écrit QUE les robes dont le statut change
+  // réellement → zéro écriture en régime stable.
+  const [{ data: activeDressRows }, { data: toggleableDresses }] = await Promise.all([
+    supabase
+      .from("reservation_dresses")
+      .select("dress_id")
+      .in("status", ["reserved", "rented", "preparing"])
+      .lte("start_date", today)
+      .gte("end_date", today),
+    // Seules les robes en available/reserved sont concernées (on ne touche jamais
+    // maintenance/rented/preparing).
+    supabase.from("dresses").select("id, status").in("status", ["available", "reserved"]),
+  ]);
 
-  const activeDressIds = Array.from(new Set((activeDressRows ?? []).map((item) => item.dress_id)));
+  const activeDressIds = new Set((activeDressRows ?? []).map((item) => item.dress_id));
 
-  await supabase.from("dresses").update({ status: "available" }).in("status", ["available", "reserved"]);
-
-  if (activeDressIds.length > 0) {
-    await supabase
-      .from("dresses")
-      .update({ status: "reserved" })
-      .in("id", activeDressIds)
-      .in("status", ["available", "reserved"]);
+  const idsToReserve: string[] = [];
+  const idsToFree: string[] = [];
+  for (const dress of toggleableDresses ?? []) {
+    const shouldBeReserved = activeDressIds.has(dress.id);
+    if (shouldBeReserved && dress.status !== "reserved") idsToReserve.push(dress.id);
+    else if (!shouldBeReserved && dress.status !== "available") idsToFree.push(dress.id);
   }
+
+  await Promise.all([
+    idsToReserve.length > 0
+      ? supabase.from("dresses").update({ status: "reserved" }).in("id", idsToReserve)
+      : Promise.resolve(),
+    idsToFree.length > 0
+      ? supabase.from("dresses").update({ status: "available" }).in("id", idsToFree)
+      : Promise.resolve(),
+  ]);
 
   const [
     { data: pickups },

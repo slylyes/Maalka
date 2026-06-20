@@ -82,18 +82,20 @@ export async function GET(_: Request, { params }: Params) {
 
   if (error) return serverErrorFrom(error.message);
 
-  const withUrls = await Promise.all(
-    (data ?? []).map(async (photo) => {
-      let url: string | null = null;
-      if (photo.storage_path) {
-        const { data: signed } = await supabase.storage
-          .from("dresses")
-          .createSignedUrl(photo.storage_path, 3600);
-        url = signed?.signedUrl ?? null;
-      }
-      return { ...photo, url };
-    })
-  );
+  // Génère toutes les URLs signées en un seul appel batch.
+  const paths = (data ?? []).map((photo) => photo.storage_path).filter(Boolean);
+  const signedUrlByPath = new Map<string, string>();
+  if (paths.length > 0) {
+    const { data: signedList } = await supabase.storage.from("dresses").createSignedUrls(paths, 3600);
+    for (const signed of signedList ?? []) {
+      if (signed.path && signed.signedUrl) signedUrlByPath.set(signed.path, signed.signedUrl);
+    }
+  }
+
+  const withUrls = (data ?? []).map((photo) => ({
+    ...photo,
+    url: photo.storage_path ? signedUrlByPath.get(photo.storage_path) ?? null : null,
+  }));
 
   return NextResponse.json({ data: withUrls });
 }
