@@ -590,18 +590,10 @@ export function ReservationsClient({
     [availableDressesForPicker]
   );
 
-  const formatReservationDresses = (reservation: Reservation) => {
-    const items = reservation.reservation_dresses ?? [];
-    if (!items.length) return "-";
-    const labels = items.map((item) => {
-      const dress = item.dresses;
-      if (!dress) return "Robe";
-      const namePart = dress.name ? `- ${dress.name}` : "";
-      return `${dress.reference ?? "Robe"} ${namePart}`.trim();
-    });
-    if (labels.length <= 2) return labels.join(", ");
-    return `${labels[0]}, ${labels[1]} +${labels.length - 2}`;
-  };
+  const reservationDressNames = (reservation: Reservation) =>
+    (reservation.reservation_dresses ?? []).map(
+      (item) => item.dresses?.name || item.dresses?.reference || "Robe"
+    );
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -893,69 +885,94 @@ export function ReservationsClient({
         <article className="premium-card p-6 xl:col-span-8">
           <h2 className="text-xl font-light tracking-wide text-[var(--foreground)]">Réservations</h2>
           {loading ? <p className="mt-3 text-sm text-[var(--muted)]">Chargement...</p> : null}
-          <div className="mt-4 overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead>
-                <tr className="text-xs uppercase tracking-wide text-[var(--muted)]">
-                  <th className="pb-3 pr-4 font-medium">Contrat</th>
-                  <th className="pb-3 pr-4 font-medium">Période</th>
-                  <th className="pb-3 pr-4 font-medium">Client</th>
-                  <th className="pb-3 pr-4 font-medium">Robe</th>
-                  <th className="pb-3 pr-4 font-medium">Paiement</th>
-                  <th className="pb-3 font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {reservations.map((reservation) => (
-                  <tr key={reservation.id} className="border-t border-[var(--border-soft)] text-[var(--muted)]">
-                    <td className="py-4 pr-4 text-[var(--foreground)]">{reservation.contract_number}</td>
-                    <td className="py-4 pr-4">
-                      {formatDateFr(reservation.start_date)} → {formatDateFr(reservation.end_date)}
-                      <div className="mt-1 text-xs">{reservation.status}</div>
-                    </td>
-                    <td className="py-4 pr-4">
-                      {reservation.clients?.first_name} {reservation.clients?.last_name}
-                    </td>
-                    <td className="py-4 pr-4">{formatReservationDresses(reservation)}</td>
-                    <td className="py-4 pr-4">
-                      <div>Total: {formatAmount(reservation.total_price)}</div>
-                      <div>Acompte: {formatAmount(reservation.deposit_paid)}</div>
-                      <div>Reste: {formatAmount(reservation.balance_due)}</div>
-                    </td>
-                    <td className="py-4">
-                      <div className="flex flex-wrap gap-2">
-                        <a
-                          href={`/api/reservations/${reservation.id}/contract-pdf`}
-                          className="btn-secondary rounded-lg border border-[var(--border-soft)] bg-white px-3 py-1.5 text-xs text-[var(--muted)]"
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {reservations.map((reservation) => {
+              const dressNames = reservationDressNames(reservation);
+              const balance = Number(reservation.balance_due ?? 0);
+              return (
+                <div
+                  key={reservation.id}
+                  className="rounded-xl border border-[var(--border-soft)] bg-white p-4 transition-colors hover:border-[var(--accent)]"
+                >
+                  {/* Client + contrat */}
+                  <p className="truncate font-medium text-[var(--foreground)]">
+                    {reservation.clients?.first_name} {reservation.clients?.last_name}
+                  </p>
+                  <p className="mt-0.5 font-mono text-[11px] text-[var(--muted)]">
+                    {reservation.contract_number}
+                  </p>
+
+                  {/* Période */}
+                  <p className="mt-2 text-sm text-[var(--muted)]">
+                    {formatDateFr(reservation.start_date)} → {formatDateFr(reservation.end_date)}
+                  </p>
+
+                  {/* Robes (nom seul) */}
+                  {dressNames.length > 0 ? (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {dressNames.map((name, index) => (
+                        <span
+                          key={`${name}-${index}`}
+                          className="rounded-md bg-[var(--surface-soft)] px-2 py-0.5 text-xs font-medium text-[var(--foreground)]"
                         >
-                          Contrat
-                        </a>
-                        <a
-                          href={`/api/reservations/${reservation.id}/invoice-pdf`}
-                          className="btn-secondary rounded-lg border border-[var(--border-soft)] bg-white px-3 py-1.5 text-xs text-[var(--muted)]"
-                        >
-                          Facture
-                        </a>
-                        <button
-                          type="button"
-                          onClick={() => setEditingReservation(reservation)}
-                          className="btn-secondary rounded-lg border border-[var(--border-soft)] bg-white px-3 py-1.5 text-xs text-[var(--muted)]"
-                        >
-                          Modifier
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void deleteReservation(reservation.id)}
-                          className="btn-danger rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs text-rose-700"
-                        >
-                          Supprimer
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                          {name}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {/* Paiement compact */}
+                  <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--muted)]">
+                    <span>
+                      Total{" "}
+                      <span className="font-medium text-[var(--foreground)]">
+                        {formatAmount(reservation.total_price)}
+                      </span>
+                    </span>
+                    <span>
+                      Acompte{" "}
+                      <span className="text-[var(--foreground)]">{formatAmount(reservation.deposit_paid)}</span>
+                    </span>
+                    <span>
+                      Reste{" "}
+                      <span className={`font-medium ${balance > 0 ? "text-amber-700" : "text-emerald-700"}`}>
+                        {formatAmount(reservation.balance_due)}
+                      </span>
+                    </span>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <a
+                      href={`/api/reservations/${reservation.id}/contract-pdf`}
+                      className="btn-secondary rounded-lg border border-[var(--border-soft)] bg-white px-3 py-1.5 text-xs text-[var(--muted)]"
+                    >
+                      Contrat
+                    </a>
+                    <a
+                      href={`/api/reservations/${reservation.id}/invoice-pdf`}
+                      className="btn-secondary rounded-lg border border-[var(--border-soft)] bg-white px-3 py-1.5 text-xs text-[var(--muted)]"
+                    >
+                      Facture
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => setEditingReservation(reservation)}
+                      className="btn-secondary rounded-lg border border-[var(--border-soft)] bg-white px-3 py-1.5 text-xs text-[var(--muted)]"
+                    >
+                      Modifier
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void deleteReservation(reservation.id)}
+                      className="btn-danger rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs text-rose-700"
+                    >
+                      Supprimer
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
           {!loading && reservations.length === 0 ? (
             <p className="mt-4 text-sm text-[var(--muted)]">Aucune réservation enregistrée.</p>
