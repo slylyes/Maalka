@@ -81,5 +81,19 @@ export async function GET(_: Request, { params }: Params) {
     .order("created_at", { ascending: false });
 
   if (error) return serverErrorFrom(error.message);
-  return NextResponse.json({ data });
+
+  const withUrls = await Promise.all(
+    (data ?? []).map(async (photo) => {
+      let url: string | null = null;
+      if (photo.storage_path) {
+        const { data: signed } = await supabase.storage
+          .from("dresses")
+          .createSignedUrl(photo.storage_path, 3600);
+        url = signed?.signedUrl ?? null;
+      }
+      return { ...photo, url };
+    })
+  );
+
+  return NextResponse.json({ data: withUrls });
 }

@@ -21,6 +21,7 @@ type Photo = {
   id: string;
   storage_path: string;
   is_primary: boolean;
+  url?: string | null;
 };
 
 type CalendarReservation = {
@@ -63,6 +64,7 @@ export function DressesClient({ initialDresses }: DressesClientProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingDressId, setEditingDressId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   const [reference, setReference] = useState("");
   const [name, setName] = useState("");
@@ -88,15 +90,25 @@ export function DressesClient({ initialDresses }: DressesClientProps) {
     [dresses, selectedDressId]
   );
 
+  const filteredDresses = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return dresses;
+    return dresses.filter((dress) =>
+      [dress.reference, dress.name, dress.category, dress.size].some((value) =>
+        (value ?? "").toLowerCase().includes(query)
+      )
+    );
+  }, [dresses, search]);
+
   const groupedByCategory = useMemo(() => {
     const grouped = new Map<string, Dress[]>();
-    for (const dress of dresses) {
+    for (const dress of filteredDresses) {
       const key = dress.category || "Catégorie 1";
       if (!grouped.has(key)) grouped.set(key, []);
       grouped.get(key)?.push(dress);
     }
     return Array.from(grouped.entries());
-  }, [dresses]);
+  }, [filteredDresses]);
 
   const calendarGrid = useMemo(() => {
     const year = calendarMonth.getFullYear();
@@ -330,7 +342,20 @@ export function DressesClient({ initialDresses }: DressesClientProps) {
     setUploading(false);
   }
 
+  function openManage(dress: Dress) {
+    setSelectedDressId(dress.id);
+    void loadPhotos(dress.id);
+    void loadCalendar(dress.id, calendarMonth);
+  }
+
+  function closeManage() {
+    setSelectedDressId("");
+    setPhotos([]);
+    setCalendarRows([]);
+  }
+
   return (
+    <>
     <section className="grid gap-5 xl:grid-cols-12">
       <article className="premium-card p-6 xl:col-span-4">
         <h2 className="text-xl font-light tracking-wide text-[var(--foreground)]">
@@ -414,8 +439,22 @@ export function DressesClient({ initialDresses }: DressesClientProps) {
       </article>
 
       <article className="premium-card p-6 xl:col-span-8">
-        <h2 className="text-xl font-light tracking-wide text-[var(--foreground)]">Catalogue des robes</h2>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-xl font-light tracking-wide text-[var(--foreground)]">Catalogue des robes</h2>
+          <div className="relative w-full sm:max-w-xs">
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Rechercher (référence, nom, taille…)"
+              className="premium-input w-full"
+            />
+          </div>
+        </div>
         {loading ? <p className="mt-3 text-sm text-[var(--muted)]">Chargement...</p> : null}
+        {!loading && dresses.length > 0 && filteredDresses.length === 0 ? (
+          <p className="mt-4 text-sm text-[var(--muted)]">Aucune robe ne correspond à « {search} ».</p>
+        ) : null}
         <div className="mt-4 space-y-6">
           {groupedByCategory.map(([groupName, items]) => (
             <section key={groupName}>
@@ -451,11 +490,7 @@ export function DressesClient({ initialDresses }: DressesClientProps) {
                       <div className="mt-4 flex flex-wrap gap-2">
                         <button
                           type="button"
-                          onClick={() => {
-                            setSelectedDressId(dress.id);
-                            void loadPhotos(dress.id);
-                            void loadCalendar(dress.id, calendarMonth);
-                          }}
+                          onClick={() => openManage(dress)}
                           className="rounded-lg border border-[var(--border-soft)] bg-[var(--surface-soft)] px-3 py-1.5 text-xs text-[var(--muted)]"
                         >
                           Gérer
@@ -487,56 +522,102 @@ export function DressesClient({ initialDresses }: DressesClientProps) {
         ) : null}
       </article>
 
-      <article className="premium-card p-6 xl:col-span-12">
-        <h2 className="text-xl font-light tracking-wide text-[var(--foreground)]">Photos et calendrier de robe</h2>
-        {!selectedDress ? (
-          <p className="mt-2 text-sm text-[var(--muted)]">
-            Sélectionne une robe dans le catalogue pour gérer ses photos et son calendrier.
-          </p>
-        ) : (
-          <>
-            <p className="mt-2 text-sm text-[var(--muted)]">
-              Robe sélectionnée: {selectedDress.reference} {selectedDress.name ? `- ${selectedDress.name}` : ""}
-            </p>
-            <form className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center" onSubmit={uploadPhoto}>
-              <input
-                name="file"
-                type="file"
-                accept="image/*"
-                className="premium-input text-sm file:mr-3 file:rounded-md file:border-0 file:bg-[var(--surface-soft)] file:px-2.5 file:py-1.5"
-                required
-              />
-              <label className="text-sm text-[var(--muted)]">
-                <input className="mr-2" type="checkbox" name="isPrimary" />
-                Photo principale
-              </label>
+    </section>
+
+      {selectedDress ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) closeManage();
+          }}
+        >
+          <div className="premium-card w-full max-w-3xl overflow-y-auto max-h-[90vh] p-6">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h2 className="text-lg font-light tracking-wide text-[var(--foreground)]">
+                  Gérer — {selectedDress.reference}
+                  {selectedDress.name ? ` · ${selectedDress.name}` : ""}
+                </h2>
+                <p className="mt-0.5 text-xs text-[var(--muted)]">
+                  {selectedDress.category} · {formatAmount(selectedDress.price)}
+                  {selectedDress.size ? ` · Taille ${selectedDress.size}` : ""}
+                </p>
+              </div>
               <button
-                type="submit"
-                disabled={uploading}
-                className="premium-btn px-4 py-2 text-sm disabled:opacity-60"
+                type="button"
+                onClick={closeManage}
+                className="shrink-0 rounded-lg border border-[var(--border-soft)] px-3 py-1 text-sm text-[var(--muted)]"
               >
-                {uploading ? "Upload..." : "Ajouter la photo"}
+                Fermer
               </button>
-            </form>
+            </div>
 
-            {photoLoading ? <p className="mt-3 text-sm text-[var(--muted)]">Chargement des photos...</p> : null}
-            <ul className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {photos.map((photo) => (
-                <li
-                  key={photo.id}
-                  className="rounded-lg border border-[var(--border-soft)] bg-[var(--surface-soft)] p-3 text-xs text-[var(--muted)]"
+            {/* Notes */}
+            <div className="rounded-xl border border-[var(--border-soft)] bg-[var(--surface-soft)] p-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">Note</p>
+              <p className="mt-1 whitespace-pre-line text-sm text-[var(--foreground)]">
+                {selectedDress.notes?.trim() ? selectedDress.notes : "Aucune note pour cette robe."}
+              </p>
+            </div>
+
+            {/* Photos */}
+            <div className="mt-5">
+              <h3 className="text-sm font-medium uppercase tracking-wide text-[var(--muted)]">Photos</h3>
+              <form className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center" onSubmit={uploadPhoto}>
+                <input
+                  name="file"
+                  type="file"
+                  accept="image/*"
+                  className="premium-input text-sm file:mr-3 file:rounded-md file:border-0 file:bg-[var(--surface-soft)] file:px-2.5 file:py-1.5"
+                  required
+                />
+                <label className="text-sm text-[var(--muted)]">
+                  <input className="mr-2" type="checkbox" name="isPrimary" />
+                  Photo principale
+                </label>
+                <button
+                  type="submit"
+                  disabled={uploading}
+                  className="premium-btn px-4 py-2 text-sm disabled:opacity-60"
                 >
-                  <p className="font-medium text-[var(--foreground)]">
-                    {photo.is_primary ? "Principale" : "Secondaire"}
-                  </p>
-                  <p className="break-all">{photo.storage_path}</p>
-                </li>
-              ))}
-              {!photoLoading && selectedDress && photos.length === 0 ? (
-                <li className="text-sm text-[var(--muted)]">Aucune photo pour cette robe.</li>
-              ) : null}
-            </ul>
+                  {uploading ? "Upload..." : "Ajouter la photo"}
+                </button>
+              </form>
 
+              {photoLoading ? <p className="mt-3 text-sm text-[var(--muted)]">Chargement des photos...</p> : null}
+              <ul className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {photos.map((photo) => (
+                  <li
+                    key={photo.id}
+                    className="group relative overflow-hidden rounded-lg border border-[var(--border-soft)] bg-[var(--surface-soft)]"
+                  >
+                    <div className="aspect-square w-full">
+                      {photo.url ? (
+                        <img
+                          src={photo.url}
+                          alt={photo.is_primary ? "Photo principale" : "Photo"}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-xs text-[var(--muted)]">
+                          Aperçu indisponible
+                        </div>
+                      )}
+                    </div>
+                    {photo.is_primary ? (
+                      <span className="absolute left-1.5 top-1.5 rounded-full bg-[var(--accent)] px-2 py-0.5 text-[10px] font-medium text-white">
+                        Principale
+                      </span>
+                    ) : null}
+                  </li>
+                ))}
+                {!photoLoading && photos.length === 0 ? (
+                  <li className="col-span-full text-sm text-[var(--muted)]">Aucune photo pour cette robe.</li>
+                ) : null}
+              </ul>
+            </div>
+
+            {/* Calendar */}
             <div className="mt-6 rounded-xl border border-[var(--border-soft)] bg-[var(--surface-soft)] p-4">
               <div className="flex items-center justify-between gap-2">
                 <h3 className="text-base font-medium text-[var(--foreground)]">Calendrier des indisponibilités</h3>
@@ -600,7 +681,7 @@ export function DressesClient({ initialDresses }: DressesClientProps) {
                     >
                       <p className="font-medium text-[var(--foreground)]">{reservation.contract_number}</p>
                       <p>
-                        {formatDateFr(reservation.start_date)} → {formatDateFr(reservation.end_date)} ({reservation.status})
+                        {formatDateFr(reservation.start_date)} → {formatDateFr(reservation.end_date)}
                       </p>
                       {reservation.client_name ? <p>Client: {reservation.client_name}</p> : null}
                     </div>
@@ -610,9 +691,9 @@ export function DressesClient({ initialDresses }: DressesClientProps) {
                 )}
               </div>
             </div>
-          </>
-        )}
-      </article>
-    </section>
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }
