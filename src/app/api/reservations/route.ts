@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { badRequest, requireAuthenticatedUser, serverErrorFrom } from "@/lib/api/auth";
+import { isValidDate } from "@/lib/format";
 
 const allowedCautionStatuses = new Set(["pending", "received", "not_required"]);
 
@@ -59,7 +60,7 @@ export async function GET() {
   const { data, error } = await supabase
     .from("reservations")
     .select(
-      "id, contract_number, client_id, start_date, end_date, status, total_price, discount_amount, supplement, deposit_paid, balance_due, caution_amount, caution_status, pickup_datetime, return_datetime, notes, created_at, updated_at, reservation_dresses(dress_id, price, base_price, discount_amount, dresses(reference,name)), clients(first_name,last_name,phone,email)"
+      "id, contract_number, client_id, reservation_date, start_date, end_date, status, total_price, discount_amount, supplement, deposit_paid, balance_due, caution_amount, caution_status, pickup_datetime, return_datetime, notes, created_at, updated_at, reservation_dresses(dress_id, price, base_price, discount_amount, dresses(reference,name)), clients(first_name,last_name,phone,email)"
     )
     .order("created_at", { ascending: false });
 
@@ -98,6 +99,17 @@ export async function POST(request: Request) {
   if (payload.start_date > payload.end_date) {
     return badRequest("La date de fin doit être supérieure ou égale à la date de début.");
   }
+
+  // Date de réservation (jour où l'acompte a été payé). Peut être passée.
+  // Par défaut : aujourd'hui. Refuse un format invalide si fourni.
+  if (payload.reservation_date !== undefined && payload.reservation_date !== null) {
+    if (typeof payload.reservation_date !== "string" || !isValidDate(payload.reservation_date)) {
+      return badRequest("La date de réservation doit être au format AAAA-MM-JJ.");
+    }
+  }
+  const reservationDate = isValidDate(payload.reservation_date)
+    ? payload.reservation_date
+    : new Date().toISOString().slice(0, 10);
 
   if (
     payload.caution_status &&
@@ -176,6 +188,7 @@ export async function POST(request: Request) {
       contract_number: contractNumber,
       dress_id: firstDress.id,
       client_id: payload.client_id,
+      reservation_date: reservationDate,
       start_date: payload.start_date,
       end_date: payload.end_date,
       status: "reserved",
@@ -191,7 +204,7 @@ export async function POST(request: Request) {
       created_by: user.id,
     })
     .select(
-      "id, contract_number, client_id, start_date, end_date, status, total_price, discount_amount, supplement, deposit_paid, balance_due, caution_amount, caution_status, pickup_datetime, return_datetime, notes, created_at, updated_at"
+      "id, contract_number, client_id, reservation_date, start_date, end_date, status, total_price, discount_amount, supplement, deposit_paid, balance_due, caution_amount, caution_status, pickup_datetime, return_datetime, notes, created_at, updated_at"
     )
     .single();
 

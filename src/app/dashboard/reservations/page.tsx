@@ -9,7 +9,7 @@ export default async function ReservationsPage() {
     supabase
       .from("reservations")
       .select(
-        "id, contract_number, client_id, start_date, end_date, status, total_price, deposit_paid, balance_due, caution_amount, caution_status, reservation_dresses(dress_id, price, base_price, discount_amount, dresses(reference,name)), clients(first_name,last_name,phone)"
+        "id, contract_number, client_id, reservation_date, start_date, end_date, status, total_price, deposit_paid, balance_due, caution_amount, caution_status, reservation_dresses(dress_id, price, base_price, discount_amount, dresses(reference,name)), clients(first_name,last_name,phone)"
       )
       .order("created_at", { ascending: false }),
     supabase

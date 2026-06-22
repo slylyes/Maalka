@@ -81,8 +81,6 @@ export default async function FinancesPage({ searchParams }: PageProps) {
   if (from > to) {
     [from, to] = [to, from];
   }
-  // Exclusive upper bound for created_at (timestamptz) filtering
-  const toExclusive = addDaysStr(to, 1);
   // Balances are only collected once start_date has been reached (<= today)
   const balanceTo = to < today ? to : today;
 
@@ -102,12 +100,12 @@ export default async function FinancesPage({ searchParams }: PageProps) {
 
   const [depositRowsRes, balanceRowsRes, expensesRes, futureRes, dressRowsRes, categoriesRes] =
     await Promise.all([
-      // Acomptes encaissés: reservations created within the range
+      // Acomptes encaissés: réservations dont la date de réservation est dans la période
       supabase
         .from("reservations")
-        .select("id, deposit_paid, created_at, status")
-        .gte("created_at", from)
-        .lt("created_at", toExclusive)
+        .select("id, deposit_paid, reservation_date, status")
+        .gte("reservation_date", from)
+        .lte("reservation_date", to)
         .not("status", "in", '("cancelled","draft")'),
 
       // Soldes encaissés: reservations whose rental started within the range (and reached)
@@ -179,7 +177,7 @@ export default async function FinancesPage({ searchParams }: PageProps) {
   }
   const monthIndexMap = new Map(monthlyBuckets.map((b, i) => [b.key, i]));
   for (const r of depositRows) {
-    const idx = monthIndexMap.get(String(r.created_at).slice(0, 7));
+    const idx = monthIndexMap.get(String(r.reservation_date).slice(0, 7));
     if (idx !== undefined) monthlyBuckets[idx].ca += Number(r.deposit_paid ?? 0);
   }
   for (const r of balanceRows) {

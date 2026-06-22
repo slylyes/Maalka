@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { badRequest, requireAuthenticatedUser, serverErrorFrom } from "@/lib/api/auth";
+import { isValidDate } from "@/lib/format";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -44,7 +45,7 @@ export async function GET(_: Request, { params }: Params) {
   const { data, error } = await supabase
     .from("reservations")
     .select(
-      "id, contract_number, client_id, start_date, end_date, status, total_price, discount_amount, supplement, deposit_paid, balance_due, caution_amount, caution_status, pickup_datetime, return_datetime, notes, created_at, updated_at, reservation_dresses(dress_id, price, base_price, discount_amount, dresses(reference,name)), clients(first_name,last_name,phone,email,address)"
+      "id, contract_number, client_id, reservation_date, start_date, end_date, status, total_price, discount_amount, supplement, deposit_paid, balance_due, caution_amount, caution_status, pickup_datetime, return_datetime, notes, created_at, updated_at, reservation_dresses(dress_id, price, base_price, discount_amount, dresses(reference,name)), clients(first_name,last_name,phone,email,address)"
     )
     .eq("id", id)
     .single();
@@ -76,6 +77,12 @@ export async function PATCH(request: Request, { params }: Params) {
   const updatePayload: Record<string, unknown> = {};
 
   if (typeof payload.client_id === "string") updatePayload.client_id = payload.client_id;
+  if (typeof payload.reservation_date === "string") {
+    if (!isValidDate(payload.reservation_date)) {
+      return badRequest("La date de réservation doit être au format AAAA-MM-JJ.");
+    }
+    updatePayload.reservation_date = payload.reservation_date;
+  }
   if (typeof payload.start_date === "string") updatePayload.start_date = payload.start_date;
   if (typeof payload.end_date === "string") updatePayload.end_date = payload.end_date;
   if (typeof payload.status === "string") updatePayload.status = payload.status;
@@ -220,7 +227,7 @@ export async function PATCH(request: Request, { params }: Params) {
     .update(updatePayload)
     .eq("id", id)
     .select(
-      "id, contract_number, client_id, start_date, end_date, status, total_price, discount_amount, supplement, deposit_paid, balance_due, caution_amount, caution_status, pickup_datetime, return_datetime, notes, created_at, updated_at"
+      "id, contract_number, client_id, reservation_date, start_date, end_date, status, total_price, discount_amount, supplement, deposit_paid, balance_due, caution_amount, caution_status, pickup_datetime, return_datetime, notes, created_at, updated_at"
     )
     .single();
 

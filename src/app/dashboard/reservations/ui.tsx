@@ -18,6 +18,7 @@ type Reservation = {
   id: string;
   contract_number: string;
   client_id: string;
+  reservation_date: string;
   start_date: string;
   end_date: string;
   status: string;
@@ -181,6 +182,7 @@ function EditReservationModal({
   );
 
   const [clientId, setClientId] = useState(reservation.client_id);
+  const [reservationDate, setReservationDate] = useState(reservation.reservation_date);
   const [startDate, setStartDate] = useState(reservation.start_date);
   const [endDate, setEndDate] = useState(reservation.end_date);
   const [status, setStatus] = useState(reservation.status);
@@ -272,6 +274,7 @@ function EditReservationModal({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         client_id: clientId,
+        reservation_date: reservationDate,
         start_date: startDate,
         end_date: endDate,
         status,
@@ -372,6 +375,20 @@ function EditReservationModal({
               onChange={setClientId}
               placeholder="Sélectionner un client…"
               required
+            />
+          </div>
+
+          {/* Date de réservation (jour du paiement de l'acompte) */}
+          <div>
+            <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">
+              Date de réservation
+            </label>
+            <input
+              required
+              type="date"
+              value={reservationDate}
+              onChange={(e) => setReservationDate(e.target.value)}
+              className="premium-input w-full"
             />
           </div>
 
@@ -550,6 +567,7 @@ export function ReservationsClient({
   const [dressId, setDressId] = useState("");
   const [dressIds, setDressIds] = useState<string[]>([]);
   const [clientId, setClientId] = useState("");
+  const [reservationDate, setReservationDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [depositPaid, setDepositPaid] = useState("");
@@ -683,6 +701,7 @@ export function ReservationsClient({
       body: JSON.stringify({
         dress_ids: dressIds,
         client_id: clientId,
+        reservation_date: reservationDate,
         start_date: startDate,
         end_date: endDate,
         discount_amount: safeDiscount,
@@ -705,6 +724,7 @@ export function ReservationsClient({
     setDressId("");
     setDressIds([]);
     setClientId("");
+    setReservationDate(new Date().toISOString().slice(0, 10));
     setStartDate("");
     setEndDate("");
     setDepositPaid("");
@@ -810,6 +830,19 @@ export function ReservationsClient({
                 onChange={setClientId}
                 placeholder="Sélectionner un client…"
                 required
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs uppercase tracking-wide text-[var(--muted)]">
+                Date de réservation
+              </label>
+              <input
+                required
+                type="date"
+                value={reservationDate}
+                onChange={(event) => setReservationDate(event.target.value)}
+                className="premium-input w-full"
               />
             </div>
 

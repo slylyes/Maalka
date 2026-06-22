@@ -101,12 +101,6 @@ export default async function DashboardPage() {
 
   const today = new Date().toISOString().slice(0, 10);
   const monthStart = today.slice(0, 7) + "-01";
-  // Exclusive upper bound (next day) for created_at timestamptz filtering
-  const tomorrow = (() => {
-    const d = new Date(today + "T00:00:00Z");
-    d.setUTCDate(d.getUTCDate() + 1);
-    return d.toISOString().slice(0, 10);
-  })();
 
   // Réconciliation quotidienne des statuts robes (available <-> reserved selon la
   // période courante). Diff-based : on n'écrit QUE les robes dont le statut change
@@ -195,9 +189,9 @@ export default async function DashboardPage() {
     // Acomptes encaissés ce mois (à la date de réservation)
     supabase
       .from("reservations")
-      .select("deposit_paid, created_at, status")
-      .gte("created_at", monthStart)
-      .lt("created_at", tomorrow)
+      .select("deposit_paid, reservation_date, status")
+      .gte("reservation_date", monthStart)
+      .lte("reservation_date", today)
       .not("status", "in", '("cancelled","draft")'),
 
     // Soldes encaissés ce mois (au 1er jour de location atteint)
