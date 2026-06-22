@@ -388,16 +388,18 @@ function BarChart({
 // ── Main client component ─────────────────────────────────────────────────────
 export function FinancesClient({ data: initialData }: { data: FinancesPageData }) {
   const router = useRouter();
-  const [expenses, setExpenses] = useState<Expense[]>(initialData.expenses);
 
-  // When an expense is added via form: router.refresh() re-renders the server component
-  // and passes fresh data. For immediate feedback, we also optimistically update the list.
+  // La liste des dépenses est dérivée directement des données serveur : elle suit donc
+  // toujours la période sélectionnée (navigation ?from&to) et se met à jour après
+  // router.refresh() (ajout/suppression). Pas d'état local → plus de liste figée.
+  const expenses = initialData.expenses;
+
+  // Après ajout ou suppression : on relance le rendu serveur pour récupérer la liste à jour.
   function handleExpenseAdded() {
     router.refresh();
   }
 
-  function handleExpenseDeleted(id: string) {
-    setExpenses((prev) => prev.filter((e) => e.id !== id));
+  function handleExpenseDeleted() {
     router.refresh();
   }
 
