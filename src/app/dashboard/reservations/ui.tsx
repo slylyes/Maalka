@@ -543,6 +543,8 @@ export function ReservationsClient({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   // Create form state
   const [dressId, setDressId] = useState("");
@@ -599,19 +601,28 @@ export function ReservationsClient({
       (item) => item.dresses?.name || item.dresses?.reference || "Robe"
     );
 
+  const hasFilters = search.trim() !== "" || dateFrom !== "" || dateTo !== "";
+
   const filteredReservations = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return reservations;
     return reservations.filter((reservation) => {
-      const clientName = `${reservation.clients?.first_name ?? ""} ${reservation.clients?.last_name ?? ""}`;
-      const dressText = (reservation.reservation_dresses ?? [])
-        .map((item) => `${item.dresses?.name ?? ""} ${item.dresses?.reference ?? ""}`)
-        .join(" ");
-      return [clientName, reservation.contract_number, dressText].some((value) =>
-        value.toLowerCase().includes(query)
-      );
+      // Filtre texte (client, contrat, robe)
+      if (query) {
+        const clientName = `${reservation.clients?.first_name ?? ""} ${reservation.clients?.last_name ?? ""}`;
+        const dressText = (reservation.reservation_dresses ?? [])
+          .map((item) => `${item.dresses?.name ?? ""} ${item.dresses?.reference ?? ""}`)
+          .join(" ");
+        const matchesText = [clientName, reservation.contract_number, dressText].some((value) =>
+          value.toLowerCase().includes(query)
+        );
+        if (!matchesText) return false;
+      }
+      // Filtre période : on garde les réservations qui chevauchent [dateFrom, dateTo]
+      if (dateFrom && reservation.end_date < dateFrom) return false;
+      if (dateTo && reservation.start_date > dateTo) return false;
+      return true;
     });
-  }, [reservations, search]);
+  }, [reservations, search, dateFrom, dateTo]);
 
   // Rafraîchissement ciblé : seules les réservations changent après une mutation
   // de réservation (les listes robes/clients sont inchangées) → 1 requête au lieu de 3.
@@ -920,19 +931,55 @@ export function ReservationsClient({
         </article>
 
         <article className="premium-card p-6 xl:col-span-8">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="text-xl font-light tracking-wide text-[var(--foreground)]">Réservations</h2>
-            <input
-              type="search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Rechercher (client, contrat, robe…)"
-              className="premium-input w-full sm:max-w-xs"
-            />
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <h2 className="text-xl font-light tracking-wide text-[var(--foreground)]">Réservations</h2>
+              <input
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Rechercher (client, contrat, robe…)"
+                className="premium-input w-full sm:max-w-xs"
+              />
+            </div>
+            <div className="flex flex-wrap items-end gap-2">
+              <div>
+                <label className="mb-1 block text-[10px] uppercase tracking-wide text-[var(--muted)]">Du</label>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  max={dateTo || undefined}
+                  onChange={(event) => setDateFrom(event.target.value)}
+                  className="premium-input"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] uppercase tracking-wide text-[var(--muted)]">Au</label>
+                <input
+                  type="date"
+                  value={dateTo}
+                  min={dateFrom || undefined}
+                  onChange={(event) => setDateTo(event.target.value)}
+                  className="premium-input"
+                />
+              </div>
+              {dateFrom || dateTo ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDateFrom("");
+                    setDateTo("");
+                  }}
+                  className="btn-secondary rounded-lg border border-[var(--border-soft)] bg-white px-3 py-2 text-xs text-[var(--muted)]"
+                >
+                  Effacer la période
+                </button>
+              ) : null}
+            </div>
           </div>
           {loading ? <p className="mt-3 text-sm text-[var(--muted)]">Chargement...</p> : null}
-          {!loading && reservations.length > 0 && filteredReservations.length === 0 ? (
-            <p className="mt-4 text-sm text-[var(--muted)]">Aucune réservation ne correspond à « {search} ».</p>
+          {!loading && reservations.length > 0 && filteredReservations.length === 0 && hasFilters ? (
+            <p className="mt-4 text-sm text-[var(--muted)]">Aucune réservation ne correspond aux filtres.</p>
           ) : null}
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             {filteredReservations.map((reservation) => {
