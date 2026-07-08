@@ -3,6 +3,7 @@ import { CalendarDaysIcon } from "@heroicons/react/24/outline";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { formatAmount, formatDateFr } from "@/lib/format";
 import { firstRelation } from "@/lib/relations";
+import { ReservationCalendar, type CalendarReservation } from "@/app/dashboard/reservation-calendar";
 
 type DressListItem = {
   dresses?: { reference?: string; name?: string } | { reference?: string; name?: string }[] | null;
@@ -60,12 +61,14 @@ function ReservationCard({
   status,
   items,
   dateRange,
+  totalPrice,
 }: {
   contractNumber: string;
   clientName: string;
   status: string;
   items: DressListItem[] | null | undefined;
   dateRange?: { start: string; end: string };
+  totalPrice?: number;
 }) {
   return (
     <li className="rounded-xl border border-[var(--border-soft)] bg-white p-3.5 transition-colors hover:border-[var(--accent)]">
@@ -77,10 +80,15 @@ function ReservationCard({
         <StatusBadge status={status} />
       </div>
       {dateRange ? (
-        <p className="mt-2 flex items-center gap-1.5 text-xs text-[var(--muted)]">
-          <CalendarDaysIcon className="h-3.5 w-3.5 shrink-0" />
-          {formatDateFr(dateRange.start)} → {formatDateFr(dateRange.end)}
-        </p>
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <p className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
+            <CalendarDaysIcon className="h-3.5 w-3.5 shrink-0" />
+            {formatDateFr(dateRange.start)} → {formatDateFr(dateRange.end)}
+          </p>
+          {typeof totalPrice === "number" ? (
+            <p className="shrink-0 text-xs font-medium text-[var(--foreground)]">{formatAmount(totalPrice)}</p>
+          ) : null}
+        </div>
       ) : null}
       <DressChips items={items} />
     </li>
@@ -146,6 +154,7 @@ export default async function DashboardPage() {
     { data: monthDeposits },
     { data: monthBalances },
     { data: monthExpenses },
+    { data: calendarRows },
   ] = await Promise.all([
     supabase
       .from("reservations")
@@ -179,7 +188,7 @@ export default async function DashboardPage() {
     supabase
       .from("reservations")
       .select(
-        "id, contract_number, start_date, end_date, status, reservation_dresses(dress_id, dresses(reference,name)), clients(first_name,last_name)"
+        "id, contract_number, start_date, end_date, status, total_price, reservation_dresses(dress_id, dresses(reference,name)), clients(first_name,last_name)"
       )
       .gte("start_date", today)
       .in("status", ["reserved", "preparing", "rented"])
@@ -208,10 +217,29 @@ export default async function DashboardPage() {
       .select("amount")
       .gte("date", monthStart)
       .lte("date", today),
+
+    // All active reservations for the pickups calendar
+    supabase
+      .from("reservations")
+      .select(
+        "id, contract_number, start_date, end_date, total_price, reservation_dresses(dress_id, dresses(reference,name)), clients(first_name,last_name)"
+      )
+      .not("status", "in", '("cancelled","draft")')
+      .order("start_date", { ascending: true }),
   ]);
 
   const clientName = (client: { first_name?: string; last_name?: string } | null) =>
     `${client?.first_name ?? ""} ${client?.last_name ?? ""}`.trim();
+
+  const calendarReservations: CalendarReservation[] = (calendarRows ?? []).map((r) => ({
+    id: r.id,
+    contractNumber: r.contract_number,
+    clientName: clientName(firstRelation(r.clients)),
+    startDate: r.start_date,
+    endDate: r.end_date,
+    totalPrice: Number(r.total_price ?? 0),
+    dressLabels: dressReferences(r.reservation_dresses as DressListItem[] | null),
+  }));
 
   // Monthly finance summary (cash-based: acomptes à la réservation + soldes au 1er jour)
   const monthAcomptes = (monthDeposits ?? []).reduce((s, r) => s + Number(r.deposit_paid ?? 0), 0);
@@ -280,6 +308,9 @@ export default async function DashboardPage() {
         </div>
       </article>
 
+      {/* Pickups calendar */}
+      <ReservationCalendar reservations={calendarReservations} />
+
       {/* Today operations */}
       <section className="grid gap-5 lg:grid-cols-2">
         <article className="premium-card p-6">
@@ -347,6 +378,7 @@ export default async function DashboardPage() {
                 status={item.status}
                 items={item.reservation_dresses as DressListItem[] | null}
                 dateRange={{ start: item.start_date, end: item.end_date }}
+                totalPrice={item.total_price}
               />
             ))
           ) : (
