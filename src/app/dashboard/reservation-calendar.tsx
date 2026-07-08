@@ -72,10 +72,12 @@ function capitalize(value: string) {
 function DayModal({
   dateStr,
   reservations,
+  todayStr,
   onClose,
 }: {
   dateStr: string;
   reservations: CalendarReservation[];
+  todayStr: string;
   onClose: () => void;
 }) {
   useEscapeKey(onClose);
@@ -110,6 +112,9 @@ function DayModal({
         <ul className="space-y-3">
           {reservations.map((r) => {
             const phase = PHASE_META[reservationPhase(r.status)];
+            // Le solde est supposé réglé en espèces à la sortie : on n'affiche le reste
+            // à payer réel que jusqu'au jour de sortie inclus, puis 0 dès le lendemain.
+            const displayedBalance = todayStr <= r.startDate ? r.balanceDue : 0;
             return (
             <li key={r.id} className="rounded-xl border border-[var(--border-soft)] bg-white p-3.5">
               <div className="flex items-start justify-between gap-2">
@@ -127,8 +132,8 @@ function DayModal({
               </p>
               <p className="mt-1 text-xs text-[var(--muted)]">
                 Reste à payer{" "}
-                <span className={`font-medium ${r.balanceDue > 0 ? "text-amber-700" : "text-emerald-700"}`}>
-                  {formatAmount(r.balanceDue)}
+                <span className={`font-medium ${displayedBalance > 0 ? "text-amber-700" : "text-emerald-700"}`}>
+                  {formatAmount(displayedBalance)}
                 </span>
               </p>
               {r.dressLabels.length > 0 ? (
@@ -275,6 +280,7 @@ export function ReservationCalendar({ reservations }: { reservations: CalendarRe
         <DayModal
           dateStr={selectedDate}
           reservations={reservationsByDate.get(selectedDate) ?? []}
+          todayStr={todayStr}
           onClose={() => setSelectedDate(null)}
         />
       ) : null}
