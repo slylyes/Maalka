@@ -472,6 +472,36 @@ export function DressesClient({ initialDresses }: DressesClientProps) {
     setUploading(false);
   }
 
+  async function setPrimaryPhoto(photoId: string) {
+    if (!selectedDressId) return;
+    setError(null);
+    const response = await fetch(`/api/dresses/${selectedDressId}/photos/${photoId}`, {
+      method: "PATCH",
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setError(json.error || "Impossible de définir cette photo comme principale.");
+      return;
+    }
+    await loadPhotos(selectedDressId);
+    await loadDresses();
+  }
+
+  async function deletePhoto(photoId: string) {
+    if (!selectedDressId) return;
+    setError(null);
+    const response = await fetch(`/api/dresses/${selectedDressId}/photos/${photoId}`, {
+      method: "DELETE",
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setError(json.error || "Impossible de supprimer cette photo.");
+      return;
+    }
+    await loadPhotos(selectedDressId);
+    await loadDresses();
+  }
+
   function openManage(dress: Dress) {
     setSelectedDressId(dress.id);
     void loadPhotos(dress.id);
@@ -756,6 +786,26 @@ export function DressesClient({ initialDresses }: DressesClientProps) {
                         Principale
                       </span>
                     ) : null}
+                    <div className="flex items-center justify-between gap-1 border-t border-[var(--border-soft)] bg-white p-1.5">
+                      {!photo.is_primary ? (
+                        <button
+                          type="button"
+                          onClick={() => void setPrimaryPhoto(photo.id)}
+                          className="btn-secondary rounded-md border border-[var(--border-soft)] bg-white px-2 py-1 text-[11px] text-[var(--muted)]"
+                        >
+                          Principale
+                        </button>
+                      ) : (
+                        <span className="px-2 py-1 text-[11px] text-[var(--muted)]">Photo principale</span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => void deletePhoto(photo.id)}
+                        className="btn-danger rounded-md border border-rose-200 bg-white px-2 py-1 text-[11px] text-rose-700"
+                      >
+                        Supprimer
+                      </button>
+                    </div>
                   </li>
                 ))}
                 {!photoLoading && photos.length === 0 ? (

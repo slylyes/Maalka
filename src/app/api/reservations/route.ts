@@ -88,12 +88,12 @@ export async function POST(request: Request) {
     return badRequest("Le client est obligatoire.");
   }
 
-  if (!payload?.start_date || typeof payload.start_date !== "string") {
-    return badRequest("La date de début est obligatoire.");
+  if (!payload?.start_date || typeof payload.start_date !== "string" || !isValidDate(payload.start_date)) {
+    return badRequest("La date de début est obligatoire (format AAAA-MM-JJ).");
   }
 
-  if (!payload?.end_date || typeof payload.end_date !== "string") {
-    return badRequest("La date de fin est obligatoire.");
+  if (!payload?.end_date || typeof payload.end_date !== "string" || !isValidDate(payload.end_date)) {
+    return badRequest("La date de fin est obligatoire (format AAAA-MM-JJ).");
   }
 
   if (payload.start_date > payload.end_date) {

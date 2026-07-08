@@ -412,7 +412,7 @@ function InvoiceDocument({ data, logoDataUrl }: { data: ReservationPdfData; logo
 
 let logoDataUrlCache: string | null = null;
 
-async function getLogoDataUrl() {
+export async function getLogoDataUrl() {
   if (logoDataUrlCache) {
     return logoDataUrlCache;
   }

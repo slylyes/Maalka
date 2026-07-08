@@ -63,18 +63,5 @@ export async function GET(request: Request) {
   if (authError) {
     redirectUrl.searchParams.set("auth_error", authError);
   }
-  const response = NextResponse.redirect(redirectUrl);
-
-  if (reason === "2fa") {
-    response.cookies.set("maalka_2fa_verified", "1", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 60 * 12,
-    });
-    response.cookies.delete("maalka_2fa_pending");
-  }
-
-  return response;
+  return NextResponse.redirect(redirectUrl);
 }

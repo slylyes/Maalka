@@ -2,8 +2,26 @@
 
 import React, { useCallback, useState, useMemo, useRef, useEffect } from "react";
 
+import { downloadCsv } from "@/lib/csv";
 import { formatAmount, formatDateFr } from "@/lib/format";
 import { useEscapeKey } from "@/lib/use-escape-key";
+
+const STATUS_LABELS: Record<string, string> = {
+  draft: "Brouillon",
+  reserved: "Réservé",
+  preparing: "En préparation",
+  rented: "En location",
+  completed: "Terminé",
+  cancelled: "Annulé",
+};
+
+const CAUTION_STATUS_LABELS: Record<string, string> = {
+  pending: "En attente",
+  received: "Reçue",
+  returned: "Restituée",
+  retained: "Retenue",
+  not_required: "Non requise",
+};
 
 type DressOption = {
   id: string;
@@ -750,6 +768,51 @@ export function ReservationsClient({
     setError(json.error || "Suppression impossible pour cette réservation.");
   }
 
+  // Export CSV de la liste actuellement filtrée (mêmes lignes que celles affichées)
+  function exportCsv() {
+    downloadCsv(
+      `reservations-${new Date().toISOString().slice(0, 10)}.csv`,
+      [
+        "Contrat",
+        "Client",
+        "Téléphone",
+        "Date réservation",
+        "Début",
+        "Fin",
+        "Statut",
+        "Robes",
+        "Total (DA)",
+        "Acompte (DA)",
+        "Reste (DA)",
+        "Caution (DA)",
+        "Statut caution",
+      ],
+      filteredReservations.map((r) => [
+        r.contract_number,
+        `${r.clients?.first_name ?? ""} ${r.clients?.last_name ?? ""}`.trim(),
+        r.clients?.phone ?? "",
+        formatDateFr(r.reservation_date),
+        formatDateFr(r.start_date),
+        formatDateFr(r.end_date),
+        STATUS_LABELS[r.status] ?? r.status,
+        (r.reservation_dresses ?? [])
+          .map((item) => item.dresses?.reference || item.dresses?.name || "")
+          .filter(Boolean)
+          .join(", "),
+        Number(r.total_price ?? 0).toFixed(2),
+        Number(r.deposit_paid ?? 0).toFixed(2),
+        Number(r.balance_due ?? 0).toFixed(2),
+        Number(r.caution_amount ?? 0).toFixed(2),
+        CAUTION_STATUS_LABELS[r.caution_status] ?? r.caution_status,
+      ])
+    );
+  }
+
+  // Export PDF : mêmes filtres (texte + période) appliqués côté serveur
+  const exportPdfUrl = `/api/reservations/export-pdf?q=${encodeURIComponent(search.trim())}${
+    dateFrom ? `&from=${dateFrom}` : ""
+  }${dateTo ? `&to=${dateTo}` : ""}`;
+
   return (
     <>
       {editingReservation ? (
@@ -1008,6 +1071,21 @@ export function ReservationsClient({
                   Effacer la période
                 </button>
               ) : null}
+              <div className="ml-auto flex gap-2">
+                <button
+                  type="button"
+                  onClick={exportCsv}
+                  className="btn-secondary rounded-lg border border-[var(--border-soft)] bg-white px-3 py-2 text-xs text-[var(--muted)]"
+                >
+                  Export CSV
+                </button>
+                <a
+                  href={exportPdfUrl}
+                  className="btn-secondary rounded-lg border border-[var(--border-soft)] bg-white px-3 py-2 text-xs text-[var(--muted)]"
+                >
+                  Export PDF
+                </a>
+              </div>
             </div>
           </div>
           {loading ? <p className="mt-3 text-sm text-[var(--muted)]">Chargement...</p> : null}

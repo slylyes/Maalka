@@ -83,8 +83,18 @@ export async function PATCH(request: Request, { params }: Params) {
     }
     updatePayload.reservation_date = payload.reservation_date;
   }
-  if (typeof payload.start_date === "string") updatePayload.start_date = payload.start_date;
-  if (typeof payload.end_date === "string") updatePayload.end_date = payload.end_date;
+  if (typeof payload.start_date === "string") {
+    if (!isValidDate(payload.start_date)) {
+      return badRequest("La date de début doit être au format AAAA-MM-JJ.");
+    }
+    updatePayload.start_date = payload.start_date;
+  }
+  if (typeof payload.end_date === "string") {
+    if (!isValidDate(payload.end_date)) {
+      return badRequest("La date de fin doit être au format AAAA-MM-JJ.");
+    }
+    updatePayload.end_date = payload.end_date;
+  }
   if (typeof payload.status === "string") updatePayload.status = payload.status;
   if (typeof payload.total_price === "number" && payload.total_price >= 0) {
     updatePayload.total_price = payload.total_price;

@@ -2,7 +2,8 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { FinancesPageData, Expense } from "@/app/dashboard/finances/page";
+import type { FinancesPageData, Expense } from "@/lib/finances";
+import { downloadCsv } from "@/lib/csv";
 import { formatAmount, formatDateFr } from "@/lib/format";
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -423,6 +424,23 @@ export function FinancesClient({ data: initialData }: { data: FinancesPageData }
 
   const totalForecastPending = forecastMonths.reduce((s, m) => s + m.balancePending, 0);
 
+  // Export CSV des dépenses de la période affichée (le PDF contient le rapport complet)
+  function exportExpensesCsv() {
+    downloadCsv(
+      `depenses-${from}-${to}.csv`,
+      ["Date", "Montant (DA)", "Catégorie", "Catégorie de robe", "Description"],
+      expenses.map((e) => [
+        formatDateFr(e.date),
+        Number(e.amount).toFixed(2),
+        CATEGORY_LABELS[e.category] ?? e.category,
+        e.dress_category ?? "",
+        e.description ?? "",
+      ])
+    );
+  }
+
+  const exportPdfUrl = `/api/finances/export-pdf?from=${from}&to=${to}`;
+
   return (
     <section className="grid gap-5">
       {/* Header + date range picker */}
@@ -434,6 +452,21 @@ export function FinancesClient({ data: initialData }: { data: FinancesPageData }
           <p className="text-sm text-[var(--muted)]">
             Du {formatDateFr(from)} au {formatDateFr(to)}
           </p>
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              onClick={exportExpensesCsv}
+              className="btn-secondary rounded-lg border border-[var(--border-soft)] bg-white px-3 py-1.5 text-xs text-[var(--muted)]"
+            >
+              Export CSV (dépenses)
+            </button>
+            <a
+              href={exportPdfUrl}
+              className="btn-secondary rounded-lg border border-[var(--border-soft)] bg-white px-3 py-1.5 text-xs text-[var(--muted)]"
+            >
+              Export PDF (rapport)
+            </a>
+          </div>
         </div>
         <DateRangePicker from={from} to={to} />
       </div>

@@ -39,17 +39,11 @@ export async function proxy(request: NextRequest) {
   const loginStep = request.nextUrl.searchParams.get("step");
   const isLoginPage = pathname === "/login";
   const isProtectedPage = pathname.startsWith("/dashboard");
-  const isTwoFactorVerified = true;
   const hasRecoveryParams =
     request.nextUrl.searchParams.get("type") === "recovery" ||
     request.nextUrl.searchParams.get("type") === "invite" ||
     request.nextUrl.searchParams.has("token_hash") ||
     request.nextUrl.searchParams.has("code");
-
-  const clearTwoFactorCookies = () => {
-    response.cookies.delete("maalka_2fa_verified");
-    response.cookies.delete("maalka_2fa_pending");
-  };
 
   if (!user && isProtectedPage) {
     const url = request.nextUrl.clone();
@@ -58,15 +52,9 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (!user) {
-    clearTwoFactorCookies();
-  }
+  const allowLoginStep = loginStep === "reset";
 
-  // 2FA disabled: no additional redirect needed
-
-  const allowLoginStep = loginStep === "reset" || loginStep === "otp";
-
-  if (user && isLoginPage && isTwoFactorVerified && !hasRecoveryParams && !allowLoginStep) {
+  if (user && isLoginPage && !hasRecoveryParams && !allowLoginStep) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     url.search = "";

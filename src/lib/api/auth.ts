@@ -1,14 +1,8 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-type AuthGuardOptions = {
-  requireTwoFactor?: boolean;
-};
-
-export async function requireAuthenticatedUser(options: AuthGuardOptions = {}) {
-  const requireTwoFactor = options.requireTwoFactor ?? false;
+export async function requireAuthenticatedUser() {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -24,22 +18,6 @@ export async function requireAuthenticatedUser(options: AuthGuardOptions = {}) {
         { status: 401 }
       ),
     };
-  }
-
-  if (requireTwoFactor) {
-    const cookieStore = await cookies();
-    const isTwoFactorVerified = cookieStore.get("maalka_2fa_verified")?.value === "1";
-
-    if (!isTwoFactorVerified) {
-      return {
-        supabase,
-        user: null,
-        unauthorizedResponse: NextResponse.json(
-          { error: "Two-factor authentication required" },
-          { status: 403 }
-        ),
-      };
-    }
   }
 
   return {

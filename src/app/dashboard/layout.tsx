@@ -1,5 +1,4 @@
 import Image from "next/image";
-import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -11,9 +10,6 @@ async function signOutAction() {
 
   const supabase = await createSupabaseServerClient();
   await supabase.auth.signOut();
-  const cookieStore = await cookies();
-  cookieStore.delete("maalka_2fa_verified");
-  cookieStore.delete("maalka_2fa_pending");
   redirect("/login");
 }
 
