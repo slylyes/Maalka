@@ -110,6 +110,39 @@ export default async function DashboardPage() {
   const today = new Date().toISOString().slice(0, 10);
   const monthStart = today.slice(0, 7) + "-01";
 
+  // Réconciliation quotidienne des statuts de réservation basée sur les dates de
+  // location (aucune action du personnel requise) :
+  //   reserved/preparing -> rented     dès que start_date est atteinte
+  //   rented              -> completed dès que end_date est dépassée
+  // Propagé à reservation_dresses pour rester cohérent avec la disponibilité des robes
+  // (doit tourner AVANT la réconciliation des statuts robes ci-dessous).
+  const { data: transitionableReservations } = await supabase
+    .from("reservations")
+    .select("id, start_date, end_date, status")
+    .in("status", ["reserved", "preparing", "rented"]);
+
+  const idsToRent: string[] = [];
+  const idsToComplete: string[] = [];
+  for (const r of transitionableReservations ?? []) {
+    if (r.end_date < today) idsToComplete.push(r.id);
+    else if (r.start_date <= today && r.status !== "rented") idsToRent.push(r.id);
+  }
+
+  await Promise.all([
+    idsToRent.length > 0
+      ? supabase.from("reservations").update({ status: "rented" }).in("id", idsToRent)
+      : Promise.resolve(),
+    idsToComplete.length > 0
+      ? supabase.from("reservations").update({ status: "completed" }).in("id", idsToComplete)
+      : Promise.resolve(),
+    idsToRent.length > 0
+      ? supabase.from("reservation_dresses").update({ status: "rented" }).in("reservation_id", idsToRent)
+      : Promise.resolve(),
+    idsToComplete.length > 0
+      ? supabase.from("reservation_dresses").update({ status: "completed" }).in("reservation_id", idsToComplete)
+      : Promise.resolve(),
+  ]);
+
   // Réconciliation quotidienne des statuts robes (available <-> reserved selon la
   // période courante). Diff-based : on n'écrit QUE les robes dont le statut change
   // réellement → zéro écriture en régime stable.
@@ -222,7 +255,7 @@ export default async function DashboardPage() {
     supabase
       .from("reservations")
       .select(
-        "id, contract_number, start_date, end_date, total_price, reservation_dresses(dress_id, dresses(reference,name)), clients(first_name,last_name)"
+        "id, contract_number, start_date, end_date, status, total_price, reservation_dresses(dress_id, dresses(reference,name)), clients(first_name,last_name)"
       )
       .not("status", "in", '("cancelled","draft")')
       .order("start_date", { ascending: true }),
@@ -239,6 +272,7 @@ export default async function DashboardPage() {
     endDate: r.end_date,
     totalPrice: Number(r.total_price ?? 0),
     dressLabels: dressReferences(r.reservation_dresses as DressListItem[] | null),
+    status: r.status,
   }));
 
   // Monthly finance summary (cash-based: acomptes à la réservation + soldes au 1er jour)
