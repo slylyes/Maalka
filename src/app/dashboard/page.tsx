@@ -255,7 +255,7 @@ export default async function DashboardPage() {
     supabase
       .from("reservations")
       .select(
-        "id, contract_number, start_date, end_date, status, total_price, reservation_dresses(dress_id, dresses(reference,name)), clients(first_name,last_name)"
+        "id, contract_number, start_date, end_date, status, total_price, balance_due, reservation_dresses(dress_id, dresses(reference,name)), clients(first_name,last_name)"
       )
       .not("status", "in", '("cancelled","draft")')
       .order("start_date", { ascending: true }),
@@ -271,6 +271,7 @@ export default async function DashboardPage() {
     startDate: r.start_date,
     endDate: r.end_date,
     totalPrice: Number(r.total_price ?? 0),
+    balanceDue: Number(r.balance_due ?? 0),
     dressLabels: dressReferences(r.reservation_dresses as DressListItem[] | null),
     status: r.status,
   }));

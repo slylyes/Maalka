@@ -13,6 +13,7 @@ export type CalendarReservation = {
   startDate: string;
   endDate: string;
   totalPrice: number;
+  balanceDue: number;
   dressLabels: string[];
   status: string;
 };
@@ -123,6 +124,12 @@ function DayModal({
               </div>
               <p className="mt-2 text-xs text-[var(--muted)]">
                 {formatDateFr(r.startDate)} → {formatDateFr(r.endDate)}
+              </p>
+              <p className="mt-1 text-xs text-[var(--muted)]">
+                Reste à payer{" "}
+                <span className={`font-medium ${r.balanceDue > 0 ? "text-amber-700" : "text-emerald-700"}`}>
+                  {formatAmount(r.balanceDue)}
+                </span>
               </p>
               {r.dressLabels.length > 0 ? (
                 <div className="mt-2 flex flex-wrap gap-1.5">
